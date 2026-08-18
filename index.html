@@ -1,0 +1,1623 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="day">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Y.Mine · AirMind V2.0 低空全域调度引擎</title>
+
+    <!-- CDN 资源 -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js">
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js">
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js">
+    </script>
+
+    <style>
+        /* ================================================================
+               LAYER 1: DESIGN TOKENS (设计令牌)
+               Y.Mine Design System · 深空战舰控制台
+               ================================================================ */
+        :root,
+        [data-theme="day"] {
+            /* === 品牌色 === */
+            --ym-blue: #3B82F6;
+            --ym-blue-glow: rgba(59, 130, 246, 0.15);
+            --ym-gold: #D4A040;
+            --ym-gold-light: #F5D76E;
+            --ym-gold-glow: rgba(212, 160, 64, 0.12);
+            --ym-cyan: #4DD0E1;
+            --ym-cyan-glow: rgba(77, 208, 225, 0.15);
+            --ym-danger: #EF5350;
+            --ym-danger-glow: rgba(239, 83, 80, 0.15);
+            --ym-success: #27AE60;
+            --ym-success-glow: rgba(39, 174, 96, 0.15);
+            --ym-purple: #8B5CF6;
+            --ym-purple-glow: rgba(139, 92, 246, 0.15);
+
+            /* === 背景色阶 (日间) === */
+            --ym-bg-body: #0A0E17;
+            --ym-bg-card: rgba(16, 22, 36, 0.82);
+            --ym-bg-elevated: rgba(255, 255, 255, 0.04);
+            --ym-bg-hover: rgba(255, 255, 255, 0.06);
+            --ym-bg-inset: rgba(0, 0, 0, 0.25);
+
+            /* === 文本色阶 (日间) === */
+            --ym-text-primary: #EDEAE3;
+            --ym-text-secondary: #B8BFC9;
+            --ym-text-muted: #6B7A8F;
+            --ym-text-dim: #3A4658;
+
+            /* === 边框 === */
+            --ym-border: rgba(255, 255, 255, 0.06);
+            --ym-border-light: rgba(255, 255, 255, 0.10);
+
+            /* === 阴影 === */
+            --ym-shadow-card: 0 8px 32px rgba(0, 0, 0, 0.5);
+            --ym-shadow-glow: 0 0 40px rgba(59, 130, 246, 0.05);
+
+            /* === 状态色带 === */
+            --ym-band-green: #27AE60;
+            --ym-band-yellow: #F5D76E;
+            --ym-band-red: #EF5350;
+            --ym-band-bg: rgba(255, 255, 255, 0.06);
+        }
+
+        /* ===== 夜间暖色模式 ===== */
+        [data-theme="night"] {
+            /* 暖色背景 */
+            --ym-bg-body: #14100C;
+            --ym-bg-card: rgba(30, 24, 18, 0.85);
+            --ym-bg-elevated: rgba(255, 248, 240, 0.04);
+            --ym-bg-inset: rgba(0, 0, 0, 0.35);
+
+            /* 暖色文本 */
+            --ym-text-primary: #F0EAE0;
+            --ym-text-secondary: #D4C8B8;
+            --ym-text-muted: #9A8B7A;
+            --ym-text-dim: #5A4E40;
+
+            /* 暖色边框 */
+            --ym-border: rgba(255, 248, 240, 0.06);
+            --ym-border-light: rgba(255, 248, 240, 0.10);
+
+            /* 暖色阴影 */
+            --ym-shadow-card: 0 8px 32px rgba(0, 0, 0, 0.7);
+
+            /* 品牌色微调（暖化） */
+            --ym-blue: #60A5FA;
+            --ym-blue-glow: rgba(96, 165, 250, 0.12);
+            --ym-gold: #D4A040;
+            --ym-gold-light: #F5D76E;
+            --ym-cyan: #67E8F9;
+        }
+
+        /* ================================================================
+               LAYER 2: RESET & BASE
+               ================================================================ */
+        *,
+        *::before,
+        *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            font-size: 16px;
+            scroll-behavior: smooth;
+        }
+
+        body {
+            background: var(--ym-bg-body);
+            color: var(--ym-text-primary);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 0;
+            min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            padding-top: 52px;
+            transition: background 0.6s ease, color 0.4s ease;
+        }
+
+        ::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--ym-text-dim);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--ym-text-muted);
+        }
+
+        /* ================================================================
+               LAYER 3: GLOBAL STATUS BAR
+               ================================================================ */
+        .ym-status-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            height: 52px;
+            background: rgba(10, 14, 23, 0.92);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-bottom: 1px solid var(--ym-border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            font-size: 12px;
+            color: var(--ym-text-muted);
+            user-select: none;
+            transition: background 0.6s ease, border-color 0.4s ease;
+        }
+
+        [data-theme="night"] .ym-status-bar {
+            background: rgba(20, 16, 12, 0.95);
+        }
+
+        .ym-status-bar .left {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .ym-status-bar .brand {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 600;
+            color: var(--ym-text-primary);
+            font-size: 14px;
+        }
+
+        .ym-status-bar .brand span {
+            color: var(--ym-text-muted);
+            font-weight: 400;
+            font-size: 11px;
+        }
+
+        .ym-status-bar .status-tag {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 2px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 500;
+            background: var(--ym-success-glow);
+            color: var(--ym-success);
+            border: 1px solid rgba(39, 174, 96, 0.15);
+        }
+
+        .ym-status-bar .status-tag .dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--ym-success);
+            animation: pulse-dot 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse-dot {
+            0%,
+            100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.3;
+            }
+        }
+
+        .ym-status-bar .status-tag.warning {
+            background: var(--ym-gold-glow);
+            color: var(--ym-gold-light);
+            border-color: rgba(212, 160, 64, 0.15);
+        }
+        .ym-status-bar .status-tag.warning .dot {
+            background: var(--ym-gold);
+        }
+
+        .ym-status-bar .status-tag.danger {
+            background: var(--ym-danger-glow);
+            color: var(--ym-danger);
+            border-color: rgba(239, 83, 80, 0.15);
+        }
+        .ym-status-bar .status-tag.danger .dot {
+            background: var(--ym-danger);
+            animation: pulse-dot 0.6s ease-in-out infinite;
+        }
+
+        .ym-status-bar .version {
+            color: var(--ym-text-dim);
+            font-size: 11px;
+            font-family: 'JetBrains Mono', monospace;
+            letter-spacing: 0.04em;
+        }
+
+        .ym-status-bar .version strong {
+            color: var(--ym-text-muted);
+        }
+
+        .ym-status-bar .right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .ym-status-bar .theme-toggle {
+            background: var(--ym-bg-elevated);
+            border: 1px solid var(--ym-border);
+            border-radius: 6px;
+            padding: 4px 10px;
+            color: var(--ym-text-muted);
+            cursor: pointer;
+            font-size: 16px;
+            transition: all var(--ym-transition);
+            line-height: 1.4;
+        }
+
+        .ym-status-bar .theme-toggle:hover {
+            background: var(--ym-bg-hover);
+            border-color: var(--ym-border-light);
+        }
+
+        .ym-status-bar .btn-emergency {
+            background: var(--ym-danger);
+            color: #fff;
+            border: none;
+            padding: 5px 16px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all var(--ym-transition);
+            font-family: inherit;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .ym-status-bar .btn-emergency:hover {
+            background: #d32f2f;
+            transform: scale(1.02);
+        }
+
+        .ym-status-bar .btn-emergency:active {
+            transform: scale(0.96);
+        }
+
+        /* ================================================================
+               LAYER 4: LAYOUT SYSTEM
+               ================================================================ */
+        .ym-app {
+            max-width: 1480px;
+            margin: 0 auto;
+            padding: 16px 24px 40px;
+            transition: padding 0.3s ease;
+        }
+
+        /* ================================================================
+               LAYER 5: NAV TABS
+               ================================================================ */
+        .ym-nav {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-bottom: 20px;
+            background: var(--ym-bg-card);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            padding: 4px;
+            border-radius: 10px;
+            border: 1px solid var(--ym-border);
+            transition: background 0.4s ease, border-color 0.4s ease;
+        }
+
+        .ym-nav .tab-btn {
+            padding: 8px 20px;
+            border-radius: 7px;
+            background: transparent;
+            border: none;
+            color: var(--ym-text-muted);
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 13px;
+            transition: all var(--ym-transition);
+            font-family: inherit;
+            white-space: nowrap;
+        }
+
+        .ym-nav .tab-btn:hover {
+            color: var(--ym-text-secondary);
+            background: var(--ym-bg-elevated);
+        }
+
+        .ym-nav .tab-btn.active {
+            background: var(--ym-blue);
+            color: #fff;
+            box-shadow: 0 4px 16px rgba(59, 130, 246, 0.30);
+        }
+
+        [data-theme="night"] .ym-nav .tab-btn.active {
+            background: #4F8FD9;
+            box-shadow: 0 4px 16px rgba(79, 143, 217, 0.25);
+        }
+
+        /* ================================================================
+               LAYER 6: TAB CONTENT
+               ================================================================ */
+        .ym-tab-content {
+            display: none;
+            animation: fadeIn 0.35s ease;
+        }
+
+        .ym-tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(8px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* ================================================================
+               LAYER 7: CARDS & COMPONENTS
+               ================================================================ */
+        .ym-card {
+            background: var(--ym-bg-card);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--ym-border);
+            border-radius: 10px;
+            padding: 18px 20px;
+            margin-bottom: 16px;
+            box-shadow: var(--ym-shadow-card);
+            transition: border-color var(--ym-transition), background 0.4s ease, box-shadow 0.4s ease;
+        }
+
+        .ym-card:hover {
+            border-color: var(--ym-border-light);
+        }
+
+        .ym-card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+
+        .ym-card-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--ym-text-primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .ym-card-title .badge {
+            font-size: 10px;
+            padding: 0 10px;
+            border-radius: 20px;
+            line-height: 20px;
+            font-weight: 500;
+        }
+
+        .ym-card-title .badge-blue {
+            background: var(--ym-blue-glow);
+            color: var(--ym-blue);
+        }
+        .ym-card-title .badge-gold {
+            background: var(--ym-gold-glow);
+            color: var(--ym-gold-light);
+        }
+        .ym-card-title .badge-cyan {
+            background: var(--ym-cyan-glow);
+            color: var(--ym-cyan);
+        }
+        .ym-card-title .badge-danger {
+            background: var(--ym-danger-glow);
+            color: var(--ym-danger);
+        }
+        .ym-card-title .badge-purple {
+            background: var(--ym-purple-glow);
+            color: var(--ym-purple);
+        }
+
+        /* ===== KPI 卡片 ===== */
+        .ym-kpi {
+            background: var(--ym-bg-elevated);
+            border: 1px solid var(--ym-border);
+            border-radius: 8px;
+            padding: 12px 14px;
+            text-align: center;
+            transition: all var(--ym-transition);
+        }
+
+        .ym-kpi:hover {
+            border-color: var(--ym-border-light);
+            transform: translateY(-1px);
+        }
+
+        .ym-kpi .value {
+            font-size: 22px;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+            line-height: 1.2;
+            color: var(--ym-text-primary);
+        }
+
+        .ym-kpi .value.blue {
+            color: var(--ym-blue);
+        }
+        .ym-kpi .value.gold {
+            color: var(--ym-gold-light);
+        }
+        .ym-kpi .value.cyan {
+            color: var(--ym-cyan);
+        }
+        .ym-kpi .value.danger {
+            color: var(--ym-danger);
+        }
+        .ym-kpi .value.success {
+            color: var(--ym-success);
+        }
+        .ym-kpi .value.purple {
+            color: var(--ym-purple);
+        }
+        .ym-kpi .value.muted {
+            color: var(--ym-text-muted);
+        }
+
+        .ym-kpi .label {
+            font-size: 11px;
+            color: var(--ym-text-muted);
+            margin-top: 2px;
+            font-weight: 450;
+            letter-spacing: 0.02em;
+        }
+
+        .ym-kpi .sub {
+            font-size: 10px;
+            color: var(--ym-text-dim);
+            margin-top: 1px;
+        }
+
+        /* ===== 网格系统 ===== */
+        .ym-grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1.2fr;
+            gap: 16px;
+        }
+
+        .ym-grid-3 {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 14px;
+        }
+
+        .ym-grid-4 {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 14px;
+        }
+
+        .ym-grid-5 {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 14px;
+        }
+
+        .ym-grid-6 {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 12px;
+        }
+
+        .ym-grid-2-inner {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        /* ===== 稳态阈值进度条 ===== */
+        .steady-threshold {
+            background: var(--ym-bg-inset);
+            border-radius: 8px;
+            padding: 14px 16px;
+            border: 1px solid var(--ym-border);
+        }
+
+        .steady-threshold .header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: var(--ym-text-muted);
+            margin-bottom: 6px;
+        }
+
+        .steady-threshold .track {
+            position: relative;
+            width: 100%;
+            height: 18px;
+            background: var(--ym-bg-elevated);
+            border-radius: 9px;
+            overflow: hidden;
+            display: flex;
+        }
+
+        .steady-threshold .track .zone {
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 9px;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.7);
+            transition: width 0.5s ease;
+        }
+
+        .steady-threshold .track .zone.green {
+            background: var(--ym-band-green);
+        }
+        .steady-threshold .track .zone.yellow {
+            background: var(--ym-band-yellow);
+            color: rgba(0, 0, 0, 0.6);
+        }
+        .steady-threshold .track .zone.red {
+            background: var(--ym-band-red);
+        }
+
+        .steady-threshold .marker {
+            position: absolute;
+            top: -4px;
+            width: 3px;
+            height: 26px;
+            background: var(--ym-text-primary);
+            border-radius: 2px;
+            transition: left 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 0 12px rgba(255, 255, 255, 0.2);
+        }
+
+        .steady-threshold .labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+            color: var(--ym-text-dim);
+            margin-top: 4px;
+        }
+
+        /* ===== 四大底座流转链路 ===== */
+        .flow-chain {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 8px;
+            gap: 4px;
+            flex-wrap: nowrap;
+            overflow-x: auto;
+        }
+
+        .flow-chain .node {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 70px;
+            padding: 8px 12px;
+            background: var(--ym-bg-elevated);
+            border-radius: 8px;
+            border: 1px solid var(--ym-border);
+            transition: all var(--ym-transition);
+            flex-shrink: 0;
+        }
+
+        .flow-chain .node .icon {
+            font-size: 24px;
+            line-height: 1.2;
+        }
+
+        .flow-chain .node .name {
+            font-size: 10px;
+            color: var(--ym-text-muted);
+            margin-top: 2px;
+        }
+
+        .flow-chain .node .val {
+            font-size: 11px;
+            font-weight: 600;
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--ym-text-primary);
+        }
+
+        .flow-chain .arrow {
+            font-size: 18px;
+            color: var(--ym-text-dim);
+            flex-shrink: 0;
+            animation: flow-pulse 1.8s ease-in-out infinite;
+        }
+
+        @keyframes flow-pulse {
+            0%,
+            100% {
+                opacity: 0.3;
+                transform: translateX(0);
+            }
+            50% {
+                opacity: 0.9;
+                transform: translateX(4px);
+            }
+        }
+
+        .flow-chain .arrow:nth-child(4) {
+            animation-delay: 0.4s;
+        }
+        .flow-chain .arrow:nth-child(6) {
+            animation-delay: 0.8s;
+        }
+        .flow-chain .arrow:nth-child(8) {
+            animation-delay: 1.2s;
+        }
+
+        /* ===== 雷达图容器 ===== */
+        .chart-container {
+            width: 100%;
+            height: 260px;
+        }
+
+        /* ================================================================
+               LAYER 8: RESPONSIVE
+               ================================================================ */
+        @media (max-width: 1200px) {
+            .ym-grid-6 {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        @media (max-width: 1024px) {
+            .ym-grid-2 {
+                grid-template-columns: 1fr;
+            }
+            .ym-grid-3 {
+                grid-template-columns: 1fr 1fr;
+            }
+            .ym-grid-5 {
+                grid-template-columns: repeat(3, 1fr);
+            }
+            .ym-grid-6 {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .ym-grid-4 {
+                grid-template-columns: 1fr 1fr;
+            }
+            .ym-grid-5 {
+                grid-template-columns: 1fr 1fr;
+            }
+            .ym-grid-6 {
+                grid-template-columns: 1fr 1fr;
+            }
+            .ym-grid-2-inner {
+                grid-template-columns: 1fr;
+            }
+
+            .ym-status-bar .version {
+                display: none;
+            }
+            .ym-status-bar .left {
+                gap: 10px;
+            }
+            .ym-status-bar .brand {
+                font-size: 12px;
+            }
+            .ym-status-bar .brand span {
+                display: none;
+            }
+            .ym-app {
+                padding: 12px 12px 30px;
+            }
+            .ym-nav .tab-btn {
+                font-size: 12px;
+                padding: 6px 12px;
+            }
+            .ym-card {
+                padding: 14px 16px;
+            }
+            .flow-chain {
+                gap: 2px;
+            }
+            .flow-chain .node {
+                min-width: 56px;
+                padding: 6px 8px;
+            }
+            .flow-chain .node .icon {
+                font-size: 18px;
+            }
+            .flow-chain .arrow {
+                font-size: 14px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .ym-grid-4,
+            .ym-grid-5,
+            .ym-grid-6 {
+                grid-template-columns: 1fr 1fr;
+            }
+            .ym-grid-3 {
+                grid-template-columns: 1fr;
+            }
+            .ym-status-bar .status-tag {
+                font-size: 10px;
+                padding: 1px 8px;
+            }
+            .ym-status-bar .right {
+                gap: 8px;
+            }
+            .ym-status-bar .btn-emergency {
+                font-size: 10px;
+                padding: 4px 10px;
+            }
+            .ym-kpi .value {
+                font-size: 18px;
+            }
+            .chart-container {
+                height: 200px;
+            }
+        }
+
+        /* ================================================================
+               LAYER 9: PRINT STYLES
+               ================================================================ */
+        @media print {
+            body {
+                padding-top: 0 !important;
+                background: #fff !important;
+                color: #222 !important;
+            }
+
+            .ym-status-bar {
+                display: none !important;
+            }
+
+            .ym-nav {
+                display: none !important;
+            }
+
+            .ym-card {
+                background: #fff !important;
+                border: 1px solid #ddd !important;
+                box-shadow: none !important;
+                backdrop-filter: none !important;
+            }
+
+            .ym-tab-content {
+                display: block !important;
+            }
+
+            .ym-tab-content:not(.active) {
+                display: none !important;
+            }
+
+            .ym-kpi {
+                background: #f5f5f5 !important;
+                border-color: #ddd !important;
+            }
+
+            .ym-kpi .value {
+                color: #222 !important;
+            }
+        }
+
+        /* ================================================================
+               LAYER 10: UTILITIES
+               ================================================================ */
+        .text-muted {
+            color: var(--ym-text-muted);
+        }
+        .text-gold {
+            color: var(--ym-gold-light);
+        }
+        .text-cyan {
+            color: var(--ym-cyan);
+        }
+        .text-danger {
+            color: var(--ym-danger);
+        }
+        .text-success {
+            color: var(--ym-success);
+        }
+        .text-blue {
+            color: var(--ym-blue);
+        }
+
+        .mt-8 {
+            margin-top: 8px;
+        }
+        .mt-12 {
+            margin-top: 12px;
+        }
+        .mb-8 {
+            margin-bottom: 8px;
+        }
+        .mb-16 {
+            margin-bottom: 16px;
+        }
+
+        .flex-between {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .gap-8 {
+            gap: 8px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- ============================================================
+    GLOBAL STATUS BAR
+    ============================================================ -->
+    <header class="ym-status-bar" id="statusBar">
+        <div class="left">
+            <div class="brand">
+                🛩️ AirMind <span>V2.0</span>
+            </div>
+            <div class="status-tag" id="statusTag">
+                <span class="dot"></span>
+                <span id="statusLabel">SYSTEM STABLE</span>
+            </div>
+            <span class="version">
+                Game-OS V2.1 · <strong id="steadyDisplay">0.50</strong>
+            </span>
+        </div>
+        <div class="right">
+            <button class="theme-toggle" id="themeToggle" title="切换日间/夜间模式">🌙</button>
+            <button class="btn-emergency" id="emergencyBtn">🛑 紧急停机</button>
+        </div>
+    </header>
+
+    <!-- ============================================================
+    MAIN APPLICATION
+    ============================================================ -->
+    <div class="ym-app" id="app">
+
+        <!-- ===== NAVIGATION ===== -->
+        <nav class="ym-nav" id="navTabs">
+            <button class="tab-btn active" data-tab="tab1">📊 总控态势</button>
+            <button class="tab-btn" data-tab="tab2">⚖️ 博弈与定价</button>
+            <button class="tab-btn" data-tab="tab3">📦 物流与算力</button>
+            <button class="tab-btn" data-tab="tab4">🧬 神经与控制</button>
+            <button class="tab-btn" data-tab="tab5">🚨 应急调度</button>
+            <button class="tab-btn" data-tab="tab6">⚙️ 系统管理</button>
+        </nav>
+
+        <!-- ============================================================
+        TAB 1: 总控态势 (完全对照设计图)
+        ============================================================ -->
+        <div class="ym-tab-content active" id="tab1">
+
+            <!-- KPI 行: 6个混合指标 -->
+            <div class="ym-grid-6" style="margin-bottom:16px;">
+                <div class="ym-kpi">
+                    <div class="value success">99.7%</div>
+                    <div class="label">系统可用率</div>
+                    <div class="sub">✅ 稳定运行</div>
+                </div>
+                <div class="ym-kpi">
+                    <div class="value blue">1,284</div>
+                    <div class="label">活跃仿真任务</div>
+                    <div class="sub">📊 实时</div>
+                </div>
+                <div class="ym-kpi">
+                    <div class="value cyan">3.2ms</div>
+                    <div class="label">平均响应延迟</div>
+                    <div class="sub">⚡ 极速</div>
+                </div>
+                <div class="ym-kpi">
+                    <div class="value gold">847/1000</div>
+                    <div class="label">节点在线率</div>
+                    <div class="sub">🌐 在线</div>
+                </div>
+                <div class="ym-kpi">
+                    <div class="value purple">B12.4M</div>
+                    <div class="label">资产估值总量</div>
+                    <div class="sub">💰 实时</div>
+                </div>
+                <div class="ym-kpi">
+                    <div class="value gold">0.48</div>
+                    <div class="label">⚖️ 博弈均衡度</div>
+                    <div class="sub">安全区</div>
+                </div>
+            </div>
+
+            <!-- 雷达图 + 稳态阈值 + 系统负载 -->
+            <div class="ym-grid-2">
+                <!-- 左: 雷达图 -->
+                <div class="ym-card">
+                    <div class="ym-card-header">
+                        <div class="ym-card-title">🎯 风险-管控-收益 三维评估 <span class="badge badge-purple">实时</span></div>
+                        <span style="font-size:11px;color:var(--ym-text-dim);">风险 0.58 · 管控 0.52 · 收益 0.15</span>
+                    </div>
+                    <div id="radarChart" class="chart-container"></div>
+                </div>
+
+                <!-- 右: 稳态阈值 + 负载 -->
+                <div>
+                    <div class="ym-card">
+                        <div class="ym-card-header">
+                            <div class="ym-card-title">📊 系统稳态阈值 <span class="badge badge-gold">实时监控</span></div>
+                        </div>
+                        <div class="steady-threshold">
+                            <div class="header">
+                                <span>当前均衡度</span>
+                                <span style="font-family:'JetBrains Mono',monospace;font-weight:600;color:var(--ym-text-primary);" id="steadyValue">0.50</span>
+                            </div>
+                            <div class="track">
+                                <div class="zone green" style="width:60%;">安全区 &lt;60%</div>
+                                <div class="zone yellow" style="width:20%;">预留区</div>
+                                <div class="zone red" style="width:20%;">极限 &gt;80%</div>
+                                <div class="marker" id="steadyMarker" style="left:45%;"></div>
+                            </div>
+                            <div class="labels">
+                                <span>0%</span>
+                                <span>60%</span>
+                                <span>80%</span>
+                                <span>100%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 系统负载 -->
+                    <div class="ym-card">
+                        <div class="ym-card-header">
+                            <div class="ym-card-title">⚡ 系统负载 <span class="badge badge-blue">实时</span></div>
+                        </div>
+                        <div style="display:flex;flex-direction:column;gap:10px;">
+                            <div>
+                                <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--ym-text-muted);">
+                                    <span>CPU 负载 (SYS)</span>
+                                    <span style="color:var(--ym-text-primary);font-family:'JetBrains Mono',monospace;">72%</span>
+                                </div>
+                                <div style="width:100%;height:6px;background:var(--ym-bg-elevated);border-radius:3px;overflow:hidden;">
+                                    <span style="display:block;width:72%;height:100%;background:var(--ym-gold);border-radius:3px;"></span>
+                                </div>
+                            </div>
+                            <div>
+                                <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--ym-text-muted);">
+                                    <span>内存占用 (MEM)</span>
+                                    <span style="color:var(--ym-text-primary);font-family:'JetBrains Mono',monospace;">58%</span>
+                                </div>
+                                <div style="width:100%;height:6px;background:var(--ym-bg-elevated);border-radius:3px;overflow:hidden;">
+                                    <span style="display:block;width:58%;height:100%;background:var(--ym-cyan);border-radius:3px;"></span>
+                                </div>
+                            </div>
+                            <div>
+                                <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--ym-text-muted);">
+                                    <span>网络吞吐 (NET)</span>
+                                    <span style="color:var(--ym-text-primary);font-family:'JetBrains Mono',monospace;">89%</span>
+                                </div>
+                                <div style="width:100%;height:6px;background:var(--ym-bg-elevated);border-radius:3px;overflow:hidden;">
+                                    <span style="display:block;width:89%;height:100%;background:var(--ym-blue);border-radius:3px;"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 四大底座流转链路 -->
+            <div class="ym-card">
+                <div class="ym-card-header">
+                    <div class="ym-card-title">🔄 四大底座数据流链路 <span class="badge badge-cyan">实时流转</span></div>
+                    <span style="font-size:11px;color:var(--ym-text-dim);">采集 → 计算 → 决策 → 执行</span>
+                </div>
+                <div class="flow-chain">
+                    <div class="node">
+                        <span class="icon">📡</span>
+                        <span class="name">数据采集层</span>
+                        <span class="val">2.4GB/s</span>
+                    </div>
+                    <span class="arrow">▶</span>
+                    <div class="node">
+                        <span class="icon">⚙️</span>
+                        <span class="name">计算引擎层</span>
+                        <span class="val">AirMind V2</span>
+                    </div>
+                    <span class="arrow">▶</span>
+                    <div class="node">
+                        <span class="icon">🧠</span>
+                        <span class="name">决策模型层</span>
+                        <span class="val">Active</span>
+                    </div>
+                    <span class="arrow">▶</span>
+                    <div class="node">
+                        <span class="icon">🚀</span>
+                        <span class="name">执行控制层</span>
+                        <span class="val">Core</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================================
+        TAB 2: 博弈与定价 (保留)
+        ============================================================ -->
+        <div class="ym-tab-content" id="tab2">
+            <div class="ym-grid-2">
+                <div class="ym-card">
+                    <div class="ym-card-header">
+                        <div class="ym-card-title">⚖️ GameBase 博弈均衡 <span class="badge badge-gold">凯利公式</span></div>
+                    </div>
+                    <div style="font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--ym-text-secondary);background:var(--ym-bg-elevated);padding:10px 14px;border-radius:6px;margin-bottom:12px;">
+                        f* = (b·p − q) / b = (1.0 · 0.50 − 0.50) / 1.0 = <strong style="color:var(--ym-gold-light);">0.000</strong>
+                    </div>
+                    <div class="ym-grid-2-inner">
+                        <div class="ym-kpi">
+                            <div class="value gold" style="font-size:20px;">0.00</div>
+                            <div class="label">凯利 f* 推荐</div>
+                        </div>
+                        <div class="ym-kpi">
+                            <div class="value" style="font-size:20px;">29%</div>
+                            <div class="label">人机配比（人工%）</div>
+                        </div>
+                        <div class="ym-kpi">
+                            <div class="value" style="font-size:20px;">0.40</div>
+                            <div class="label">三方协调度</div>
+                        </div>
+                        <div class="ym-kpi">
+                            <div class="value" style="font-size:20px;">0.40</div>
+                            <div class="label">供需均衡点</div>
+                        </div>
+                    </div>
+                    <div style="margin-top:12px;font-size:12px;color:var(--ym-text-dim);">
+                        ⚡ 人机协同配比（人工占比）<strong style="color:var(--ym-text-secondary);">29%</strong>
+                        <span style="display:inline-block;width:60%;height:4px;background:var(--ym-bg-elevated);border-radius:2px;margin-left:8px;vertical-align:middle;overflow:hidden;">
+                            <span style="display:block;width:29%;height:100%;background:var(--ym-gold);border-radius:2px;"></span>
+                        </span>
+                    </div>
+                </div>
+                <div class="ym-card">
+                    <div class="ym-card-header">
+                        <div class="ym-card-title">💎 AirCalc 空域精算定价 <span class="badge badge-cyan">动态</span></div>
+                    </div>
+                    <div class="ym-grid-2-inner">
+                        <div class="ym-kpi">
+                            <div class="value gold" style="font-size:18px;">¥1.38</div>
+                            <div class="label">低空 0-500m</div>
+                        </div>
+                        <div class="ym-kpi">
+                            <div class="value cyan" style="font-size:18px;">¥3.22</div>
+                            <div class="label">中空 500-6000m</div>
+                        </div>
+                        <div class="ym-kpi">
+                            <div class="value" style="font-size:18px;">¥6.32</div>
+                            <div class="label">高空 6000m+</div>
+                        </div>
+                        <div class="ym-kpi">
+                            <div class="value danger" style="font-size:18px;">+15%</div>
+                            <div class="label">气象风险溢价</div>
+                        </div>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;margin-top:10px;font-size:12px;color:var(--ym-text-muted);">
+                        <span>⏰ 时段：<strong style="color:var(--ym-text-secondary);">平峰</strong></span>
+                        <span>🌤️ 气象：<strong style="color:var(--ym-text-secondary);">多云</strong></span>
+                        <span>📊 归一综合定价：<strong style="color:var(--ym-gold-light);">0.45</strong></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================================
+        TAB 3: 物流与算力 (精简保留)
+        ============================================================ -->
+        <div class="ym-tab-content" id="tab3">
+            <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+                <button class="tab-btn" style="background:var(--ym-blue);color:#fff;padding:6px 16px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:500;" data-subtab="logistics-sub1">📋 任务中心</button>
+                <button class="tab-btn" style="background:var(--ym-bg-elevated);color:var(--ym-text-muted);padding:6px 16px;border:1px solid var(--ym-border);border-radius:6px;cursor:pointer;font-size:13px;font-weight:500;" data-subtab="logistics-sub2">⚡ 算力监控</button>
+            </div>
+
+            <div id="logistics-sub1" class="ym-sub-content">
+                <div class="ym-grid-2">
+                    <div class="ym-card">
+                        <div class="ym-card-header"><div class="ym-card-title">📋 任务工单池 <span class="badge badge-blue">待分配 12</span></div></div>
+                        <div style="max-height:280px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;">
+                            <div style="display:flex;justify-content:space-between;padding:8px 10px;background:var(--ym-bg-elevated);border-radius:4px;border-left:3px solid var(--ym-danger);">
+                                <span><strong style="color:var(--ym-text-primary);">#1021</strong> 医疗样本</span>
+                                <span style="color:var(--ym-text-muted);">5kg · 30min</span>
+                                <span style="color:var(--ym-danger);font-size:11px;">紧急</span>
+                            </div>
+                            <div style="display:flex;justify-content:space-between;padding:8px 10px;background:var(--ym-bg-elevated);border-radius:4px;border-left:3px solid var(--ym-blue);">
+                                <span><strong style="color:var(--ym-text-primary);">#1022</strong> 快递包裹</span>
+                                <span style="color:var(--ym-text-muted);">12kg · 60min</span>
+                                <span style="color:var(--ym-text-muted);font-size:11px;">标准</span>
+                            </div>
+                            <div style="display:flex;justify-content:space-between;padding:8px 10px;background:var(--ym-bg-elevated);border-radius:4px;border-left:3px solid var(--ym-cyan);">
+                                <span><strong style="color:var(--ym-text-primary);">#1023</strong> 外卖餐盒</span>
+                                <span style="color:var(--ym-text-muted);">3kg · 20min</span>
+                                <span style="color:var(--ym-text-muted);font-size:11px;">普通</span>
+                            </div>
+                            <div style="display:flex;justify-content:space-between;padding:8px 10px;background:var(--ym-bg-elevated);border-radius:4px;border-left:3px solid var(--ym-gold);">
+                                <span><strong style="color:var(--ym-text-primary);">#1024</strong> 跨城急件</span>
+                                <span style="color:var(--ym-text-muted);">8kg · 45min</span>
+                                <span style="color:var(--ym-gold-light);font-size:11px;">高优先级</span>
+                            </div>
+                        </div>
+                        <div style="margin-top:10px;font-size:12px;color:var(--ym-text-dim);">📊 待分配 12 单 · 运力不足 3 单</div>
+                    </div>
+                    <div class="ym-card">
+                        <div class="ym-card-header"><div class="ym-card-title">🛩️ 运力匹配推荐 <span class="badge badge-cyan">智能</span></div></div>
+                        <div style="display:flex;flex-direction:column;gap:8px;">
+                            <div style="background:var(--ym-bg-elevated);border-radius:6px;padding:10px 14px;border:1px solid var(--ym-gold);">
+                                <div style="display:flex;justify-content:space-between;align-items:center;">
+                                    <span><strong style="color:var(--ym-text-primary);">固定翼 #07</strong></span>
+                                    <span style="color:var(--ym-gold-light);font-weight:600;">匹配度 96%</span>
+                                </div>
+                                <div style="font-size:12px;color:var(--ym-text-muted);">载重余量 8kg · SOH 92% 🟢</div>
+                            </div>
+                            <div style="background:var(--ym-bg-elevated);border-radius:6px;padding:10px 14px;border:1px solid var(--ym-border);">
+                                <div style="display:flex;justify-content:space-between;align-items:center;">
+                                    <span><strong style="color:var(--ym-text-primary);">多旋翼 #03</strong></span>
+                                    <span style="color:var(--ym-text-muted);font-weight:600;">匹配度 78%</span>
+                                </div>
+                                <div style="font-size:12px;color:var(--ym-text-muted);">载重余量 2kg · SOH 65% 🟡</div>
+                            </div>
+                            <div style="background:var(--ym-bg-elevated);border-radius:6px;padding:10px 14px;border:1px solid var(--ym-border);">
+                                <div style="display:flex;justify-content:space-between;align-items:center;">
+                                    <span><strong style="color:var(--ym-text-primary);">倾转旋翼 #02</strong></span>
+                                    <span style="color:var(--ym-text-muted);font-weight:600;">匹配度 71%</span>
+                                </div>
+                                <div style="font-size:12px;color:var(--ym-text-muted);">载重余量 5kg · SOH 58% 🔴</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="logistics-sub2" class="ym-sub-content" style="display:none;">
+                <div class="ym-grid-2">
+                    <div class="ym-card">
+                        <div class="ym-card-header"><div class="ym-card-title">⚡ 算力负载监控 <span class="badge badge-cyan">V/S/L</span></div></div>
+                        <div style="display:flex;flex-direction:column;gap:10px;">
+                            <div><div style="display:flex;justify-content:space-between;font-size:13px;"><span style="color:var(--ym-text-muted);">V 向量运算</span><span style="color:var(--ym-text-primary);font-family:'JetBrains Mono',monospace;">57%</span></div>
+                                <div style="width:100%;height:6px;background:var(--ym-bg-elevated);border-radius:3px;overflow:hidden;"><span style="display:block;width:57%;height:100%;background:var(--ym-blue);border-radius:3px;"></span></div></div>
+                            <div><div style="display:flex;justify-content:space-between;font-size:13px;"><span style="color:var(--ym-text-muted);">S 策略推演</span><span style="color:var(--ym-text-primary);font-family:'JetBrains Mono',monospace;">54%</span></div>
+                                <div style="width:100%;height:6px;background:var(--ym-bg-elevated);border-radius:3px;overflow:hidden;"><span style="display:block;width:54%;height:100%;background:var(--ym-cyan);border-radius:3px;"></span></div></div>
+                            <div><div style="display:flex;justify-content:space-between;font-size:13px;"><span style="color:var(--ym-text-muted);">L 日志审计</span><span style="color:var(--ym-text-primary);font-family:'JetBrains Mono',monospace;">28%</span></div>
+                                <div style="width:100%;height:6px;background:var(--ym-bg-elevated);border-radius:3px;overflow:hidden;"><span style="display:block;width:28%;height:100%;background:var(--ym-gold);border-radius:3px;"></span></div></div>
+                        </div>
+                    </div>
+                    <div class="ym-card">
+                        <div class="ym-card-header"><div class="ym-card-title">📊 算力综合状态</div></div>
+                        <div class="ym-grid-2-inner">
+                            <div class="ym-kpi"><div class="value blue" style="font-size:20px;">0.61</div><div class="label">有效算力浓度</div></div>
+                            <div class="ym-kpi"><div class="value success" style="font-size:16px;">正常</div><div class="label">负载均衡状态</div></div>
+                            <div class="ym-kpi"><div class="value" style="font-size:16px;">待命</div><div class="label">熔断降级</div></div>
+                            <div class="ym-kpi"><div class="value" style="font-size:16px;color:var(--ym-gold-light);">中</div><div class="label">错峰调度强度</div></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================================
+        TAB 4: 神经与控制
+        ============================================================ -->
+        <div class="ym-tab-content" id="tab4">
+            <div class="ym-grid-2">
+                <div class="ym-card">
+                    <div class="ym-card-header"><div class="ym-card-title">🧬 仿生映射 · 建筑力学 <span class="badge badge-gold">三类机型</span></div></div>
+                    <div style="display:flex;flex-direction:column;gap:8px;">
+                        <div style="background:var(--ym-bg-elevated);border-radius:6px;padding:10px 14px;border-left:3px solid var(--ym-danger);">
+                            <div style="display:flex;justify-content:space-between;"><span><strong>🪟 无锁落地窗</strong></span><span style="color:var(--ym-danger);font-size:12px;">人工权重 ↑60%</span></div>
+                            <div style="font-size:12px;color:var(--ym-text-muted);">空心薄壁单点无人机 · 极易滑脱形变</div>
+                        </div>
+                        <div style="background:var(--ym-bg-elevated);border-radius:6px;padding:10px 14px;border-left:3px solid var(--ym-success);">
+                            <div style="display:flex;justify-content:space-between;"><span><strong>🔒 多点锁平开窗</strong></span><span style="color:var(--ym-success);font-size:12px;">人工权重 20%</span></div>
+                            <div style="font-size:12px;color:var(--ym-text-muted);">多电机冗余稳态无人机 · 抗扰动能力强</div>
+                        </div>
+                        <div style="background:var(--ym-bg-elevated);border-radius:6px;padding:10px 14px;border-left:3px solid var(--ym-gold);">
+                            <div style="display:flex;justify-content:space-between;"><span><strong>↔️ 推拉活动窗</strong></span><span style="color:var(--ym-gold-light);font-size:12px;">人工权重 40%</span></div>
+                            <div style="font-size:12px;color:var(--ym-text-muted);">轻型异形易偏移无人机 · 侧风影响显著</div>
+                        </div>
+                    </div>
+                    <div style="margin-top:12px;font-size:12px;color:var(--ym-text-dim);background:var(--ym-bg-elevated);padding:8px 12px;border-radius:4px;">🧬 风压感受器 → 前庭平衡觉 → 视觉SLAM 闭环校验</div>
+                </div>
+                <div class="ym-card">
+                    <div class="ym-card-header"><div class="ym-card-title">🔧 控制论闭环 <span class="badge badge-blue">PID / 串级</span></div></div>
+                    <div style="display:flex;flex-direction:column;gap:8px;">
+                        <div style="background:var(--ym-bg-elevated);border-radius:6px;padding:10px 14px;">
+                            <div style="display:flex;justify-content:space-between;"><span><strong>🌡️ PID 水温负反馈</strong></span><span style="font-size:12px;color:var(--ym-text-muted);font-family:'JetBrains Mono',monospace;">P=0.8 · I=0.15 · D=0.05</span></div>
+                        </div>
+                        <div style="background:var(--ym-bg-elevated);border-radius:6px;padding:10px 14px;">
+                            <div style="display:flex;justify-content:space-between;"><span><strong>🛢️ 双容串级液位</strong></span><span style="font-size:12px;color:var(--ym-text-muted);">主环液位 → 副环流量</span></div>
+                        </div>
+                        <div style="background:var(--ym-bg-elevated);border-radius:6px;padding:10px 14px;">
+                            <div style="display:flex;justify-content:space-between;"><span><strong>🎯 双环串级控制</strong></span><span style="font-size:12px;color:var(--ym-text-muted);font-family:'JetBrains Mono',monospace;">外环 10Hz → 内环 200Hz</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================================
+        TAB 5: 应急调度 (保留框架)
+        ============================================================ -->
+        <div class="ym-tab-content" id="tab5">
+            <div class="ym-card">
+                <div class="ym-card-header"><div class="ym-card-title">🚨 应急调度中心 <span class="badge badge-danger">就绪</span></div></div>
+                <div style="color:var(--ym-text-dim);text-align:center;padding:20px;">
+                    <span style="font-size:40px;display:block;margin-bottom:8px;">🚁</span>
+                    应急调度模块已就绪
+                    <span style="font-size:13px;color:var(--ym-text-muted);display:block;">包含：状态输入 · 策略匹配 · 历史记录 · 图表分析 · PDF/JSON导出</span>
+                    <div style="margin-top:16px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+                        <span style="background:var(--ym-bg-elevated);padding:4px 14px;border-radius:12px;font-size:12px;color:var(--ym-text-secondary);">✅ 策略引擎</span>
+                        <span style="background:var(--ym-bg-elevated);padding:4px 14px;border-radius:12px;font-size:12px;color:var(--ym-text-secondary);">📊 ECharts 趋势</span>
+                        <span style="background:var(--ym-bg-elevated);padding:4px 14px;border-radius:12px;font-size:12px;color:var(--ym-text-secondary);">📄 PDF 报告</span>
+                        <span style="background:var(--ym-bg-elevated);padding:4px 14px;border-radius:12px;font-size:12px;color:var(--ym-text-secondary);">💾 JSON 导出</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================================
+        TAB 6: 系统管理 (保留框架)
+        ============================================================ -->
+        <div class="ym-tab-content" id="tab6">
+            <div class="ym-grid-2">
+                <div class="ym-card">
+                    <div class="ym-card-header"><div class="ym-card-title">📋 系统管理 <span class="badge badge-gold">配置中心</span></div></div>
+                    <div style="display:flex;flex-direction:column;gap:8px;">
+                        <div style="background:var(--ym-bg-elevated);border-radius:6px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;">
+                            <span>🗺️ 空域网格管理</span><span style="font-size:12px;color:var(--ym-text-muted);">禁飞区 · 限高</span>
+                        </div>
+                        <div style="background:var(--ym-bg-elevated);border-radius:6px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;">
+                            <span>🏢 企业/机型白名单</span><span style="font-size:12px;color:var(--ym-text-muted);">3 家企业 · 6 种机型</span>
+                        </div>
+                        <div style="background:var(--ym-bg-elevated);border-radius:6px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;">
+                            <span>⚙️ 策略规则引擎</span><span style="font-size:12px;color:var(--ym-text-muted);">6 种策略 · 阈值可调</span>
+                        </div>
+                        <div style="background:var(--ym-bg-elevated);border-radius:6px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;">
+                            <span>💰 定价参数配置</span><span style="font-size:12px;color:var(--ym-text-muted);">分级费率 · 溢价系数</span>
+                        </div>
+                        <div style="background:var(--ym-bg-elevated);border-radius:6px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;border-left:3px solid var(--ym-cyan);">
+                            <span>🔋 电池健康台账</span><span style="font-size:12px;color:var(--ym-cyan);">SOH 监控 · 衰减曲线</span>
+                        </div>
+                        <div style="background:var(--ym-bg-elevated);border-radius:6px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;border-left:3px solid var(--ym-purple);">
+                            <span>🌙 外观设置</span>
+                            <span style="font-size:12px;color:var(--ym-purple);">
+                                <button id="themeToggleSettings" style="background:var(--ym-bg-elevated);border:1px solid var(--ym-border);border-radius:4px;padding:2px 12px;color:var(--ym-text-secondary);cursor:pointer;font-size:12px;">🌙 切换夜间模式</button>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                <div class="ym-card">
+                    <div class="ym-card-header"><div class="ym-card-title">🔋 电池健康分布 <span class="badge badge-cyan">机队状态</span></div></div>
+                    <div style="text-align:center;padding:20px 0;">
+                        <span style="font-size:48px;display:block;margin-bottom:8px;">🔋</span>
+                        <div style="display:flex;gap:20px;justify-content:center;font-size:13px;flex-wrap:wrap;">
+                            <span>🟢 健康 ≥80%: <strong style="color:var(--ym-text-primary);">4</strong></span>
+                            <span>🟡 注意 60-80%: <strong style="color:var(--ym-text-primary);">2</strong></span>
+                            <span>🔴 报废 &lt;60%: <strong style="color:var(--ym-text-primary);">1</strong></span>
+                        </div>
+                        <div style="margin-top:12px;height:80px;background:var(--ym-bg-elevated);border-radius:6px;display:flex;align-items:flex-end;justify-content:center;gap:20px;padding:0 20px;">
+                            <div style="width:40px;height:60px;background:var(--ym-success);border-radius:4px 4px 0 0;display:flex;align-items:flex-start;justify-content:center;padding-top:4px;font-size:12px;font-weight:600;color:#fff;">4</div>
+                            <div style="width:40px;height:35px;background:var(--ym-gold);border-radius:4px 4px 0 0;display:flex;align-items:flex-start;justify-content:center;padding-top:4px;font-size:12px;font-weight:600;color:#fff;">2</div>
+                            <div style="width:40px;height:20px;background:var(--ym-danger);border-radius:4px 4px 0 0;display:flex;align-items:flex-start;justify-content:center;padding-top:4px;font-size:12px;font-weight:600;color:#fff;">1</div>
+                        </div>
+                        <div style="display:flex;justify-content:center;gap:20px;font-size:10px;color:var(--ym-text-dim);margin-top:4px;">
+                            <span>≥80%</span><span>60-80%</span><span>&lt;60%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== FOOTER ===== -->
+        <footer style="text-align:center;color:var(--ym-text-dim);font-size:11px;padding:20px 0 8px;border-top:1px solid var(--ym-border);margin-top:12px;transition:border-color 0.4s ease;">
+            Y.Mine · AirMind V2.0 · Game-OS V2.1 · 纯本地处理 · 数据仅存浏览器
+            <span style="display:inline-block;margin:0 12px;">|</span>
+            <a href="mailto:hellomind-y@outlook.com" style="color:var(--ym-text-muted);text-decoration:none;">hellomind-y@outlook.com</a>
+        </footer>
+    </div>
+
+
+    <!-- ============================================================
+    JAVASCRIPT
+    ============================================================ -->
+    <script>
+        (function() {
+            'use strict';
+
+            // ============================================================
+            // 1. 主题切换 (日间/夜间)
+            // ============================================================
+            const THEME_KEY = 'ym-theme';
+
+            function getPreferredTheme() {
+                const stored = localStorage.getItem(THEME_KEY);
+                if (stored) return stored;
+                const hour = new Date().getHours();
+                return (hour < 6 || hour >= 20) ? 'night' : 'day';
+            }
+
+            function applyTheme(theme) {
+                document.documentElement.setAttribute('data-theme', theme);
+                localStorage.setItem(THEME_KEY, theme);
+                const btn = document.getElementById('themeToggle');
+                const settingsBtn = document.getElementById('themeToggleSettings');
+                const icon = theme === 'night' ? '☀️' : '🌙';
+                if (btn) btn.textContent = icon;
+                if (settingsBtn) settingsBtn.textContent = theme === 'night' ? '☀️ 切换日间模式' : '🌙 切换夜间模式';
+            }
+
+            function toggleTheme() {
+                const current = document.documentElement.getAttribute('data-theme') || 'day';
+                applyTheme(current === 'night' ? 'day' : 'night');
+            }
+
+            // 初始化主题
+            applyTheme(getPreferredTheme());
+
+            // 监听系统偏好变化
+            const darkModeMedia = window.matchMedia('(prefers-color-scheme: dark)');
+            darkModeMedia.addEventListener('change', function(e) {
+                if (!localStorage.getItem(THEME_KEY)) {
+                    applyTheme(e.matches ? 'night' : 'day');
+                }
+            });
+
+            // 绑定按钮
+            document.getElementById('themeToggle')?.addEventListener('click', toggleTheme);
+            document.getElementById('themeToggleSettings')?.addEventListener('click', toggleTheme);
+
+            // ============================================================
+            // 2. Tab 切换
+            // ============================================================
+            const tabBtns = document.querySelectorAll('.ym-nav .tab-btn');
+            const tabContents = document.querySelectorAll('.ym-tab-content');
+
+            function switchTab(tabId) {
+                tabContents.forEach(c => c.classList.remove('active'));
+                const target = document.getElementById(tabId);
+                if (target) target.classList.add('active');
+
+                tabBtns.forEach(b => {
+                    b.classList.remove('active');
+                    if (b.dataset.tab === tabId) b.classList.add('active');
+                });
+
+                // 延迟重绘图表
+                setTimeout(() => {
+                    if (tabId === 'tab1') {
+                        if (window.radarChartInstance) window.radarChartInstance.resize();
+                    }
+                }, 150);
+            }
+
+            tabBtns.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    switchTab(this.dataset.tab);
+                });
+            });
+
+            // ============================================================
+            // 3. 子Tab切换 (物流)
+            // ============================================================
+            const subBtns = document.querySelectorAll('[data-subtab]');
+            subBtns.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const targetId = this.dataset.subtab;
+                    document.querySelectorAll('.ym-sub-content').forEach(c => c.style.display = 'none');
+                    const target = document.getElementById(targetId);
+                    if (target) target.style.display = 'block';
+
+                    subBtns.forEach(b => {
+                        b.style.background = 'var(--ym-bg-elevated)';
+                        b.style.color = 'var(--ym-text-muted)';
+                        b.style.border = '1px solid var(--ym-border)';
+                    });
+                    this.style.background = 'var(--ym-blue)';
+                    this.style.color = '#fff';
+                    this.style.border = 'none';
+                });
+            });
+
+            // 默认显示任务中心
+            const defaultSub = document.querySelector('[data-subtab="logistics-sub1"]');
+            if (defaultSub) defaultSub.click();
+
+            // ============================================================
+            // 4. 紧急停机
+            // ============================================================
+            document.getElementById('emergencyBtn')?.addEventListener('click', function() {
+                if (confirm('⚠️ 确认执行紧急停机？所有在途飞行将立即中止！')) {
+                    const tag = document.getElementById('statusTag');
+                    tag.className = 'status-tag danger';
+                    document.getElementById('statusLabel').textContent = 'EMERGENCY STOP';
+                    this.textContent = '⏳ 执行中...';
+                    this.disabled = true;
+
+                    setTimeout(() => {
+                        alert('✅ 紧急停机已执行，所有无人机已进入安全悬停状态。');
+                        tag.className = 'status-tag';
+                        document.getElementById('statusLabel').textContent = 'SYSTEM STABLE';
+                        this.textContent = '🛑 紧急停机';
+                        this.disabled = false;
+                    }, 2000);
+                }
+            });
+
+            // ============================================================
+            // 5. ECharts 雷达图 (三维评估)
+            // ============================================================
+            function initRadarChart() {
+                const dom = document.getElementById('radarChart');
+                if (!dom) return;
+                if (window.radarChartInstance) {
+                    window.radarChartInstance.dispose();
+                }
+                const chart = echarts.init(dom, 'dark');
+                window.radarChartInstance = chart;
+
+                const option = {
+                    tooltip: {
+                        trigger: 'item',
+                        backgroundColor: 'rgba(10,14,23,0.85)',
+                        borderColor: 'rgba(255,255,255,0.06)',
+                        textStyle: { color: '#EDEAE3' },
+                        formatter: function(params) {
+                            let res = `<strong>${params.name}</strong><br/>`;
+                            params.value.forEach((v, i) => {
+                                res += `${params.radar.indicator[i].name}：${v}<br/>`;
+                            });
+                            return res;
+                        }
+                    },
+                    radar: {
+                        indicator: [
+                            { name: '市场风险', max: 1 },
+                            { name: '信用风险', max: 1 },
+                            { name: '收益率', max: 1 },
+                            { name: '流动性', max: 1 },
+                            { name: '合规管控', max: 1 },
+                        ],
+                        shape: 'circle',
+                        splitNumber: 4,
+                        axisName: {
+                            color: '#B8BFC9',
+                            fontSize: 11,
+                            fontWeight: 500,
+                        },
+                        splitArea: {
+                            areaStyle: {
+                                color: ['rgba(59,130,246,0.02)', 'rgba(59,130,246,0.04)']
+                            }
+                        },
+                        axisLine: {
+                            lineStyle: { color: 'rgba(255,255,255,0.08)' }
+                        },
+                        splitLine: {
+                            lineStyle: { color: 'rgba(255,255,255,0.04)' }
+                        },
+                        center: ['50%', '50%'],
+                        radius: '70%',
+                    },
+                    series: [{
+                        type: 'radar',
+                        data: [{
+                            value: [0.58, 0.42, 0.30, 0.45, 0.52],
+                            name: '三维评估',
+                            areaStyle: {
+                                color: 'rgba(59,130,246,0.25)'
+                            },
+                            lineStyle: {
+                                color: '#3B82F6',
+                                width: 2
+                            },
+                            itemStyle: {
+                                color: '#3B82F6'
+                            }
+                        }],
+                        symbol: 'circle',
+                        symbolSize: 6,
+                        animationDuration: 1000,
+                    }]
+                };
+
+                chart.setOption(option);
+
+                // 响应式
+                window.addEventListener('resize', function() {
+                    if (window.radarChartInstance) window.radarChartInstance.resize();
+                });
+
+                // 主题变化时重绘
+                const observer = new MutationObserver(function() {
+                    setTimeout(() => {
+                        if (window.radarChartInstance) {
+                            window.radarChartInstance.resize();
+                            // 更新颜色适配主题
+                            const isNight = document.documentElement.getAttribute('data-theme') === 'night';
+                            const color = isNight ? '#60A5FA' : '#3B82F6';
+                            window.radarChartInstance.setOption({
+                                series: [{
+                                    lineStyle: { color: color },
+                                    itemStyle: { color: color },
+                                    areaStyle: { color: color + '40' }
+                                }]
+                            });
+                        }
+                    }, 200);
+                });
+                observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+            }
+
+            // ============================================================
+            // 6. 模拟状态栏更新
+            // ============================================================
+            function updateStatusBar() {
+                const steady = (0.48 + Math.random() * 0.04).toFixed(2);
+                document.getElementById('steadyDisplay').textContent = steady;
+                document.getElementById('steadyValue').textContent = steady;
+
+                // 阈值指针位置
+                const pct = ((parseFloat(steady) - 0.44) / 0.28) * 100;
+                const marker = document.getElementById('steadyMarker');
+                if (marker) {
+                    marker.style.left = Math.min(Math.max(pct, 5), 95) + '%';
+                }
+
+                // 均衡度KPI
+                const eq = (0.45 + Math.random() * 0.06).toFixed(2);
+                const kpiEq = document.querySelector('.ym-kpi .value.gold');
+                if (kpiEq && kpiEq.textContent !== '0.48') {
+                    // 仅更新，不干扰初始值
+                }
+                // 直接更新第一个gold value (第6个KPI)
+                const allGold = document.querySelectorAll('.ym-kpi .value.gold');
+                if (allGold.length > 0) {
+                    const target = allGold[allGold.length - 1];
+                    if (target) target.textContent = eq;
+                }
+            }
+
+            setInterval(updateStatusBar, 4000);
+
+            // ============================================================
+            // 7. 初始化
+            // ============================================================
+            document.addEventListener('DOMContentLoaded', function() {
+                initRadarChart();
+
+                // 激活Tab 1的图表
+                setTimeout(() => {
+                    if (window.radarChartInstance) window.radarChartInstance.resize();
+                }, 300);
+
+                console.log('🛩️ Y.Mine · AirMind V2.0 已启动');
+                console.log('📦 纯本地处理 · 数据仅存浏览器');
+                console.log('📧 hellomind-y@outlook.com');
+                console.log('🌙 夜间模式:', document.documentElement.getAttribute('data-theme'));
+            });
+
+        })();
+    </script>
+
+</body>
+</html>
