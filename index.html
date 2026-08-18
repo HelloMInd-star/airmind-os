@@ -20,7 +20,6 @@
                ================================================================ */
         :root,
         [data-theme="day"] {
-            /* === 品牌色 === */
             --ym-blue: #3B82F6;
             --ym-blue-glow: rgba(59, 130, 246, 0.15);
             --ym-gold: #D4A040;
@@ -34,57 +33,39 @@
             --ym-success-glow: rgba(39, 174, 96, 0.15);
             --ym-purple: #8B5CF6;
             --ym-purple-glow: rgba(139, 92, 246, 0.15);
-
-            /* === 背景色阶 (日间) === */
             --ym-bg-body: #0A0E17;
             --ym-bg-card: rgba(16, 22, 36, 0.82);
             --ym-bg-elevated: rgba(255, 255, 255, 0.04);
             --ym-bg-hover: rgba(255, 255, 255, 0.06);
             --ym-bg-inset: rgba(0, 0, 0, 0.25);
-
-            /* === 文本色阶 (日间) === */
             --ym-text-primary: #EDEAE3;
             --ym-text-secondary: #B8BFC9;
             --ym-text-muted: #6B7A8F;
             --ym-text-dim: #3A4658;
-
-            /* === 边框 === */
             --ym-border: rgba(255, 255, 255, 0.06);
             --ym-border-light: rgba(255, 255, 255, 0.10);
-
-            /* === 阴影 === */
             --ym-shadow-card: 0 8px 32px rgba(0, 0, 0, 0.5);
             --ym-shadow-glow: 0 0 40px rgba(59, 130, 246, 0.05);
-
-            /* === 状态色带 === */
             --ym-band-green: #27AE60;
             --ym-band-yellow: #F5D76E;
             --ym-band-red: #EF5350;
             --ym-band-bg: rgba(255, 255, 255, 0.06);
+            --ym-transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         /* ===== 夜间暖色模式 ===== */
         [data-theme="night"] {
-            /* 暖色背景 */
             --ym-bg-body: #14100C;
             --ym-bg-card: rgba(30, 24, 18, 0.85);
             --ym-bg-elevated: rgba(255, 248, 240, 0.04);
             --ym-bg-inset: rgba(0, 0, 0, 0.35);
-
-            /* 暖色文本 */
             --ym-text-primary: #F0EAE0;
             --ym-text-secondary: #D4C8B8;
             --ym-text-muted: #9A8B7A;
             --ym-text-dim: #5A4E40;
-
-            /* 暖色边框 */
             --ym-border: rgba(255, 248, 240, 0.06);
             --ym-border-light: rgba(255, 248, 240, 0.10);
-
-            /* 暖色阴影 */
             --ym-shadow-card: 0 8px 32px rgba(0, 0, 0, 0.7);
-
-            /* 品牌色微调（暖化） */
             --ym-blue: #60A5FA;
             --ym-blue-glow: rgba(96, 165, 250, 0.12);
             --ym-gold: #D4A040;
@@ -914,35 +895,36 @@
 
             <!-- KPI 行: 6个混合指标 -->
             <div class="ym-grid-6" style="margin-bottom:16px;">
+                <!-- 注意：这里只保留结构和文本标签，数值由 JS 动态更新 -->
                 <div class="ym-kpi">
-                    <div class="value success">99.7%</div>
+                    <div class="value success" id="kpiAvailability">99.7%</div>
                     <div class="label">系统可用率</div>
                     <div class="sub">✅ 稳定运行</div>
                 </div>
                 <div class="ym-kpi">
-                    <div class="value blue">1,284</div>
+                    <div class="value blue" id="kpiTasks">1,284</div>
                     <div class="label">活跃仿真任务</div>
                     <div class="sub">📊 实时</div>
                 </div>
                 <div class="ym-kpi">
-                    <div class="value cyan">3.2ms</div>
+                    <div class="value cyan" id="kpiLatency">3.2ms</div>
                     <div class="label">平均响应延迟</div>
                     <div class="sub">⚡ 极速</div>
                 </div>
                 <div class="ym-kpi">
-                    <div class="value gold">847/1000</div>
+                    <div class="value gold" id="kpiNodes">847/1000</div>
                     <div class="label">节点在线率</div>
                     <div class="sub">🌐 在线</div>
                 </div>
                 <div class="ym-kpi">
-                    <div class="value purple">B12.4M</div>
+                    <div class="value purple" id="kpiAssets">B12.4M</div>
                     <div class="label">资产估值总量</div>
                     <div class="sub">💰 实时</div>
                 </div>
                 <div class="ym-kpi">
-                    <div class="value gold">0.48</div>
+                    <div class="value gold" id="kpiEquilibrium">0.48</div>
                     <div class="label">⚖️ 博弈均衡度</div>
-                    <div class="sub">安全区</div>
+                    <div class="sub" id="equilibriumZone">安全区</div>
                 </div>
             </div>
 
@@ -992,28 +974,28 @@
                             <div>
                                 <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--ym-text-muted);">
                                     <span>CPU 负载 (SYS)</span>
-                                    <span style="color:var(--ym-text-primary);font-family:'JetBrains Mono',monospace;">72%</span>
+                                    <span style="color:var(--ym-text-primary);font-family:'JetBrains Mono',monospace;" id="loadCpu">72%</span>
                                 </div>
                                 <div style="width:100%;height:6px;background:var(--ym-bg-elevated);border-radius:3px;overflow:hidden;">
-                                    <span style="display:block;width:72%;height:100%;background:var(--ym-gold);border-radius:3px;"></span>
+                                    <span id="loadCpuBar" style="display:block;width:72%;height:100%;background:var(--ym-gold);border-radius:3px;"></span>
                                 </div>
                             </div>
                             <div>
                                 <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--ym-text-muted);">
                                     <span>内存占用 (MEM)</span>
-                                    <span style="color:var(--ym-text-primary);font-family:'JetBrains Mono',monospace;">58%</span>
+                                    <span style="color:var(--ym-text-primary);font-family:'JetBrains Mono',monospace;" id="loadMem">58%</span>
                                 </div>
                                 <div style="width:100%;height:6px;background:var(--ym-bg-elevated);border-radius:3px;overflow:hidden;">
-                                    <span style="display:block;width:58%;height:100%;background:var(--ym-cyan);border-radius:3px;"></span>
+                                    <span id="loadMemBar" style="display:block;width:58%;height:100%;background:var(--ym-cyan);border-radius:3px;"></span>
                                 </div>
                             </div>
                             <div>
                                 <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--ym-text-muted);">
                                     <span>网络吞吐 (NET)</span>
-                                    <span style="color:var(--ym-text-primary);font-family:'JetBrains Mono',monospace;">89%</span>
+                                    <span style="color:var(--ym-text-primary);font-family:'JetBrains Mono',monospace;" id="loadNet">89%</span>
                                 </div>
                                 <div style="width:100%;height:6px;background:var(--ym-bg-elevated);border-radius:3px;overflow:hidden;">
-                                    <span style="display:block;width:89%;height:100%;background:var(--ym-blue);border-radius:3px;"></span>
+                                    <span id="loadNetBar" style="display:block;width:89%;height:100%;background:var(--ym-blue);border-radius:3px;"></span>
                                 </div>
                             </div>
                         </div>
@@ -1031,7 +1013,7 @@
                     <div class="node">
                         <span class="icon">📡</span>
                         <span class="name">数据采集层</span>
-                        <span class="val">2.4GB/s</span>
+                        <span class="val" id="flowIngest">2.4GB/s</span>
                     </div>
                     <span class="arrow">▶</span>
                     <div class="node">
@@ -1043,13 +1025,13 @@
                     <div class="node">
                         <span class="icon">🧠</span>
                         <span class="name">决策模型层</span>
-                        <span class="val">Active</span>
+                        <span class="val" id="flowDecision">Active</span>
                     </div>
                     <span class="arrow">▶</span>
                     <div class="node">
                         <span class="icon">🚀</span>
                         <span class="name">执行控制层</span>
-                        <span class="val">Core</span>
+                        <span class="val" id="flowExec">98%</span>
                     </div>
                 </div>
             </div>
@@ -1338,133 +1320,150 @@
 
 
     <!-- ============================================================
-    JAVASCRIPT
+    JAVASCRIPT — 核心升级：数据驱动 + 实时模拟
     ============================================================ -->
     <script>
         (function() {
             'use strict';
 
             // ============================================================
-            // 1. 主题切换 (日间/夜间)
+            // 1. 数据存储 (Data Store)
             // ============================================================
-            const THEME_KEY = 'ym-theme';
+            const store = {
+                // KPI
+                availability: 99.7,
+                tasks: 1284,
+                latency: 3.2,
+                nodes: 847,
+                nodesTotal: 1000,
+                assets: 12.4,
+                equilibrium: 0.48,
 
-            function getPreferredTheme() {
-                const stored = localStorage.getItem(THEME_KEY);
-                if (stored) return stored;
-                const hour = new Date().getHours();
-                return (hour < 6 || hour >= 20) ? 'night' : 'day';
+                // 雷达图数据
+                radarRisk: 0.58,
+                radarCredit: 0.42,
+                radarYield: 0.30,
+                radarLiquidity: 0.45,
+                radarCompliance: 0.52,
+
+                // 负载
+                cpu: 72,
+                mem: 58,
+                net: 89,
+
+                // 流转链路
+                ingest: 2.4,
+                decision: 98,
+            };
+
+            // ============================================================
+            // 2. 模拟数据引擎 (Simulator)
+            // ============================================================
+            function simulateData() {
+                // KPI 随机游走（在合理范围内波动）
+                store.availability = Math.min(99.99, Math.max(99.0, store.availability + (Math.random() - 0.5) * 0.3));
+                store.tasks = Math.floor(Math.max(800, store.tasks + (Math.random() - 0.5) * 15));
+                store.latency = Math.min(4.5, Math.max(1.8, store.latency + (Math.random() - 0.5) * 0.2));
+                store.nodes = Math.floor(Math.min(1000, Math.max(700, store.nodes + (Math.random() - 0.5) * 5)));
+                store.assets = Math.min(15.0, Math.max(10.0, store.assets + (Math.random() - 0.5) * 0.2));
+
+                // 博弈均衡度（核心指标，影响稳态阈值）
+                store.equilibrium = Math.min(0.70, Math.max(0.40, store.equilibrium + (Math.random() - 0.5) * 0.015));
+
+                // 雷达图数据（与均衡度联动）
+                store.radarRisk = Math.min(0.80, Math.max(0.30, 0.58 + (Math.random() - 0.5) * 0.04));
+                store.radarCredit = Math.min(0.70, Math.max(0.30, 0.42 + (Math.random() - 0.5) * 0.04));
+                store.radarYield = Math.min(0.50, Math.max(0.15, 0.30 + (Math.random() - 0.5) * 0.03));
+                store.radarLiquidity = Math.min(0.60, Math.max(0.30, 0.45 + (Math.random() - 0.5) * 0.03));
+                store.radarCompliance = Math.min(0.70, Math.max(0.35, 0.52 + (Math.random() - 0.5) * 0.04));
+
+                // 负载（波动）
+                store.cpu = Math.min(92, Math.max(45, store.cpu + (Math.random() - 0.5) * 4));
+                store.mem = Math.min(85, Math.max(40, store.mem + (Math.random() - 0.5) * 3));
+                store.net = Math.min(95, Math.max(60, store.net + (Math.random() - 0.5) * 4));
+
+                // 流转链路
+                store.ingest = Math.min(3.5, Math.max(1.2, store.ingest + (Math.random() - 0.5) * 0.1));
+                store.decision = Math.min(100, Math.max(85, store.decision + (Math.random() - 0.5) * 2));
             }
 
-            function applyTheme(theme) {
-                document.documentElement.setAttribute('data-theme', theme);
-                localStorage.setItem(THEME_KEY, theme);
-                const btn = document.getElementById('themeToggle');
-                const settingsBtn = document.getElementById('themeToggleSettings');
-                const icon = theme === 'night' ? '☀️' : '🌙';
-                if (btn) btn.textContent = icon;
-                if (settingsBtn) settingsBtn.textContent = theme === 'night' ? '☀️ 切换日间模式' : '🌙 切换夜间模式';
-            }
-
-            function toggleTheme() {
-                const current = document.documentElement.getAttribute('data-theme') || 'day';
-                applyTheme(current === 'night' ? 'day' : 'night');
-            }
-
-            // 初始化主题
-            applyTheme(getPreferredTheme());
-
-            // 监听系统偏好变化
-            const darkModeMedia = window.matchMedia('(prefers-color-scheme: dark)');
-            darkModeMedia.addEventListener('change', function(e) {
-                if (!localStorage.getItem(THEME_KEY)) {
-                    applyTheme(e.matches ? 'night' : 'day');
-                }
-            });
-
-            // 绑定按钮
-            document.getElementById('themeToggle')?.addEventListener('click', toggleTheme);
-            document.getElementById('themeToggleSettings')?.addEventListener('click', toggleTheme);
-
             // ============================================================
-            // 2. Tab 切换
+            // 3. 渲染引擎 (将 Store 数据映射到 DOM)
             // ============================================================
-            const tabBtns = document.querySelectorAll('.ym-nav .tab-btn');
-            const tabContents = document.querySelectorAll('.ym-tab-content');
+            function renderDashboard() {
+                // ----- 更新 KPI -----
+                document.getElementById('kpiAvailability').textContent = store.availability.toFixed(1) + '%';
+                document.getElementById('kpiTasks').textContent = store.tasks.toLocaleString();
+                document.getElementById('kpiLatency').textContent = store.latency.toFixed(1) + 'ms';
+                document.getElementById('kpiNodes').textContent = store.nodes + '/' + store.nodesTotal;
+                document.getElementById('kpiAssets').textContent = 'B' + store.assets.toFixed(1) + 'M';
+                document.getElementById('kpiEquilibrium').textContent = store.equilibrium.toFixed(2);
 
-            function switchTab(tabId) {
-                tabContents.forEach(c => c.classList.remove('active'));
-                const target = document.getElementById(tabId);
-                if (target) target.classList.add('active');
+                // 均衡度状态标签
+                const zoneEl = document.getElementById('equilibriumZone');
+                const eq = store.equilibrium;
+                if (eq < 0.60) zoneEl.textContent = '🟢 安全区';
+                else if (eq < 0.80) zoneEl.textContent = '🟡 预警区';
+                else zoneEl.textContent = '🔴 熔断区';
 
-                tabBtns.forEach(b => {
-                    b.classList.remove('active');
-                    if (b.dataset.tab === tabId) b.classList.add('active');
-                });
+                // ----- 更新稳态阈值 -----
+                document.getElementById('steadyValue').textContent = eq.toFixed(2);
+                document.getElementById('steadyDisplay').textContent = eq.toFixed(2);
+                const pct = ((eq - 0.40) / 0.40) * 100; // 映射到 0-100%
+                document.getElementById('steadyMarker').style.left = Math.min(Math.max(pct, 5), 95) + '%';
 
-                // 延迟重绘图表
-                setTimeout(() => {
-                    if (tabId === 'tab1') {
-                        if (window.radarChartInstance) window.radarChartInstance.resize();
-                    }
-                }, 150);
-            }
-
-            tabBtns.forEach(btn => {
-                btn.addEventListener('click', function() {
-                    switchTab(this.dataset.tab);
-                });
-            });
-
-            // ============================================================
-            // 3. 子Tab切换 (物流)
-            // ============================================================
-            const subBtns = document.querySelectorAll('[data-subtab]');
-            subBtns.forEach(btn => {
-                btn.addEventListener('click', function() {
-                    const targetId = this.dataset.subtab;
-                    document.querySelectorAll('.ym-sub-content').forEach(c => c.style.display = 'none');
-                    const target = document.getElementById(targetId);
-                    if (target) target.style.display = 'block';
-
-                    subBtns.forEach(b => {
-                        b.style.background = 'var(--ym-bg-elevated)';
-                        b.style.color = 'var(--ym-text-muted)';
-                        b.style.border = '1px solid var(--ym-border)';
-                    });
-                    this.style.background = 'var(--ym-blue)';
-                    this.style.color = '#fff';
-                    this.style.border = 'none';
-                });
-            });
-
-            // 默认显示任务中心
-            const defaultSub = document.querySelector('[data-subtab="logistics-sub1"]');
-            if (defaultSub) defaultSub.click();
-
-            // ============================================================
-            // 4. 紧急停机
-            // ============================================================
-            document.getElementById('emergencyBtn')?.addEventListener('click', function() {
-                if (confirm('⚠️ 确认执行紧急停机？所有在途飞行将立即中止！')) {
-                    const tag = document.getElementById('statusTag');
+                // ----- 更新系统状态标签 -----
+                const tag = document.getElementById('statusTag');
+                const label = document.getElementById('statusLabel');
+                if (eq < 0.60) {
+                    tag.className = 'status-tag';
+                    label.textContent = 'SYSTEM STABLE';
+                } else if (eq < 0.80) {
+                    tag.className = 'status-tag warning';
+                    label.textContent = '⚠️ 预警中';
+                } else {
                     tag.className = 'status-tag danger';
-                    document.getElementById('statusLabel').textContent = 'EMERGENCY STOP';
-                    this.textContent = '⏳ 执行中...';
-                    this.disabled = true;
-
-                    setTimeout(() => {
-                        alert('✅ 紧急停机已执行，所有无人机已进入安全悬停状态。');
-                        tag.className = 'status-tag';
-                        document.getElementById('statusLabel').textContent = 'SYSTEM STABLE';
-                        this.textContent = '🛑 紧急停机';
-                        this.disabled = false;
-                    }, 2000);
+                    label.textContent = '🔴 高风险';
                 }
-            });
+
+                // ----- 更新负载 -----
+                document.getElementById('loadCpu').textContent = Math.round(store.cpu) + '%';
+                document.getElementById('loadCpuBar').style.width = Math.round(store.cpu) + '%';
+                document.getElementById('loadMem').textContent = Math.round(store.mem) + '%';
+                document.getElementById('loadMemBar').style.width = Math.round(store.mem) + '%';
+                document.getElementById('loadNet').textContent = Math.round(store.net) + '%';
+                document.getElementById('loadNetBar').style.width = Math.round(store.net) + '%';
+
+                // ----- 更新流转链路 -----
+                document.getElementById('flowIngest').textContent = store.ingest.toFixed(1) + 'GB/s';
+                document.getElementById('flowDecision').textContent = store.decision > 95 ? 'Active' : 'Pending';
+                document.getElementById('flowExec').textContent = Math.round(store.decision) + '%';
+
+                // ----- 更新雷达图 (ECharts) -----
+                if (window.radarChartInstance) {
+                    const option = window.radarChartInstance.getOption();
+                    if (option && option.series && option.series[0]) {
+                        option.series[0].data[0].value = [
+                            parseFloat(store.radarRisk.toFixed(2)),
+                            parseFloat(store.radarCredit.toFixed(2)),
+                            parseFloat(store.radarYield.toFixed(2)),
+                            parseFloat(store.radarLiquidity.toFixed(2)),
+                            parseFloat(store.radarCompliance.toFixed(2))
+                        ];
+                        window.radarChartInstance.setOption(option);
+                    }
+                }
+
+                // 更新雷达图标题中的数值
+                const radarTitle = document.querySelector('#tab1 .ym-card .ym-card-title + span');
+                if (radarTitle) {
+                    radarTitle.textContent =
+                        `风险 ${store.radarRisk.toFixed(2)} · 管控 ${store.radarCompliance.toFixed(2)} · 收益 ${store.radarYield.toFixed(2)}`;
+                }
+            }
 
             // ============================================================
-            // 5. ECharts 雷达图 (三维评估)
+            // 4. ECharts 雷达图初始化 (仅初始化，数据由 render 更新)
             // ============================================================
             function initRadarChart() {
                 const dom = document.getElementById('radarChart');
@@ -1521,7 +1520,13 @@
                     series: [{
                         type: 'radar',
                         data: [{
-                            value: [0.58, 0.42, 0.30, 0.45, 0.52],
+                            value: [
+                                store.radarRisk,
+                                store.radarCredit,
+                                store.radarYield,
+                                store.radarLiquidity,
+                                store.radarCompliance
+                            ],
                             name: '三维评估',
                             areaStyle: {
                                 color: 'rgba(59,130,246,0.25)'
@@ -1536,23 +1541,19 @@
                         }],
                         symbol: 'circle',
                         symbolSize: 6,
-                        animationDuration: 1000,
+                        animationDuration: 800,
                     }]
                 };
-
                 chart.setOption(option);
 
-                // 响应式
                 window.addEventListener('resize', function() {
                     if (window.radarChartInstance) window.radarChartInstance.resize();
                 });
 
-                // 主题变化时重绘
                 const observer = new MutationObserver(function() {
                     setTimeout(() => {
                         if (window.radarChartInstance) {
                             window.radarChartInstance.resize();
-                            // 更新颜色适配主题
                             const isNight = document.documentElement.getAttribute('data-theme') === 'night';
                             const color = isNight ? '#60A5FA' : '#3B82F6';
                             window.radarChartInstance.setOption({
@@ -1569,51 +1570,138 @@
             }
 
             // ============================================================
-            // 6. 模拟状态栏更新
+            // 5. 主题切换 (与之前保持一致)
             // ============================================================
-            function updateStatusBar() {
-                const steady = (0.48 + Math.random() * 0.04).toFixed(2);
-                document.getElementById('steadyDisplay').textContent = steady;
-                document.getElementById('steadyValue').textContent = steady;
+            const THEME_KEY = 'ym-theme';
 
-                // 阈值指针位置
-                const pct = ((parseFloat(steady) - 0.44) / 0.28) * 100;
-                const marker = document.getElementById('steadyMarker');
-                if (marker) {
-                    marker.style.left = Math.min(Math.max(pct, 5), 95) + '%';
-                }
+            function getPreferredTheme() {
+                const stored = localStorage.getItem(THEME_KEY);
+                if (stored) return stored;
+                const hour = new Date().getHours();
+                return (hour < 6 || hour >= 20) ? 'night' : 'day';
+            }
 
-                // 均衡度KPI
-                const eq = (0.45 + Math.random() * 0.06).toFixed(2);
-                const kpiEq = document.querySelector('.ym-kpi .value.gold');
-                if (kpiEq && kpiEq.textContent !== '0.48') {
-                    // 仅更新，不干扰初始值
+            function applyTheme(theme) {
+                document.documentElement.setAttribute('data-theme', theme);
+                localStorage.setItem(THEME_KEY, theme);
+                const btn = document.getElementById('themeToggle');
+                const settingsBtn = document.getElementById('themeToggleSettings');
+                const icon = theme === 'night' ? '☀️' : '🌙';
+                if (btn) btn.textContent = icon;
+                if (settingsBtn) settingsBtn.textContent = theme === 'night' ? '☀️ 切换日间模式' : '🌙 切换夜间模式';
+            }
+
+            function toggleTheme() {
+                const current = document.documentElement.getAttribute('data-theme') || 'day';
+                applyTheme(current === 'night' ? 'day' : 'night');
+            }
+
+            applyTheme(getPreferredTheme());
+            document.getElementById('themeToggle')?.addEventListener('click', toggleTheme);
+            document.getElementById('themeToggleSettings')?.addEventListener('click', toggleTheme);
+
+            // ============================================================
+            // 6. Tab 切换 (保留)
+            // ============================================================
+            const tabBtns = document.querySelectorAll('.ym-nav .tab-btn');
+            const tabContents = document.querySelectorAll('.ym-tab-content');
+
+            function switchTab(tabId) {
+                tabContents.forEach(c => c.classList.remove('active'));
+                const target = document.getElementById(tabId);
+                if (target) target.classList.add('active');
+                tabBtns.forEach(b => {
+                    b.classList.remove('active');
+                    if (b.dataset.tab === tabId) b.classList.add('active');
+                });
+                setTimeout(() => {
+                    if (tabId === 'tab1' && window.radarChartInstance) {
+                        window.radarChartInstance.resize();
+                    }
+                }, 150);
+            }
+
+            tabBtns.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    switchTab(this.dataset.tab);
+                });
+            });
+
+            // ============================================================
+            // 7. 子Tab切换 (物流)
+            // ============================================================
+            const subBtns = document.querySelectorAll('[data-subtab]');
+            subBtns.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const targetId = this.dataset.subtab;
+                    document.querySelectorAll('.ym-sub-content').forEach(c => c.style.display = 'none');
+                    const target = document.getElementById(targetId);
+                    if (target) target.style.display = 'block';
+                    subBtns.forEach(b => {
+                        b.style.background = 'var(--ym-bg-elevated)';
+                        b.style.color = 'var(--ym-text-muted)';
+                        b.style.border = '1px solid var(--ym-border)';
+                    });
+                    this.style.background = 'var(--ym-blue)';
+                    this.style.color = '#fff';
+                    this.style.border = 'none';
+                });
+            });
+            const defaultSub = document.querySelector('[data-subtab="logistics-sub1"]');
+            if (defaultSub) defaultSub.click();
+
+            // ============================================================
+            // 8. 紧急停机 (保留)
+            // ============================================================
+            document.getElementById('emergencyBtn')?.addEventListener('click', function() {
+                if (confirm('⚠️ 确认执行紧急停机？所有在途飞行将立即中止！')) {
+                    const tag = document.getElementById('statusTag');
+                    tag.className = 'status-tag danger';
+                    document.getElementById('statusLabel').textContent = 'EMERGENCY STOP';
+                    this.textContent = '⏳ 执行中...';
+                    this.disabled = true;
+                    setTimeout(() => {
+                        alert('✅ 紧急停机已执行，所有无人机已进入安全悬停状态。');
+                        tag.className = 'status-tag';
+                        document.getElementById('statusLabel').textContent = 'SYSTEM STABLE';
+                        this.textContent = '🛑 紧急停机';
+                        this.disabled = false;
+                    }, 2000);
                 }
-                // 直接更新第一个gold value (第6个KPI)
-                const allGold = document.querySelectorAll('.ym-kpi .value.gold');
-                if (allGold.length > 0) {
-                    const target = allGold[allGold.length - 1];
-                    if (target) target.textContent = eq;
+            });
+
+            // ============================================================
+            // 9. 启动循环（每 2.5 秒刷新一次）
+            // ============================================================
+            let isFirstRender = true;
+
+            function tick() {
+                simulateData();
+                renderDashboard();
+
+                // 第一次渲染完成后，确保雷达图已加载
+                if (isFirstRender) {
+                    isFirstRender = false;
+                    setTimeout(() => {
+                        if (window.radarChartInstance) window.radarChartInstance.resize();
+                    }, 100);
                 }
             }
 
-            setInterval(updateStatusBar, 4000);
-
             // ============================================================
-            // 7. 初始化
+            // 10. 初始化
             // ============================================================
             document.addEventListener('DOMContentLoaded', function() {
                 initRadarChart();
+                // 立即渲染一次
+                tick();
+                // 启动定时器
+                setInterval(tick, 2500);
 
-                // 激活Tab 1的图表
-                setTimeout(() => {
-                    if (window.radarChartInstance) window.radarChartInstance.resize();
-                }, 300);
-
-                console.log('🛩️ Y.Mine · AirMind V2.0 已启动');
+                console.log('🛩️ Y.Mine · AirMind V2.0 已启动 (数据驱动模式)');
                 console.log('📦 纯本地处理 · 数据仅存浏览器');
                 console.log('📧 hellomind-y@outlook.com');
-                console.log('🌙 夜间模式:', document.documentElement.getAttribute('data-theme'));
+                console.log('🌙 当前主题:', document.documentElement.getAttribute('data-theme'));
             });
 
         })();
