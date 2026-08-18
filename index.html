@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Y.Mine · AirMind V2.0 低空全域调度引擎</title>
 
-    <!-- CDN 资源 - 国内镜像 -->
+    <!-- CDN 资源 -->
     <script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.4.3/echarts.min.js">
     </script>
     <script src="https://cdn.bootcdn.net/ajax/libs/html2canvas/1.4.1/html2canvas.min.js">
@@ -448,6 +448,9 @@
         .ym-kpi .value.purple {
             color: var(--ym-purple);
         }
+        .ym-kpi .value.muted {
+            color: var(--ym-text-muted);
+        }
 
         .ym-kpi .label {
             font-size: 11px;
@@ -498,6 +501,113 @@
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 12px;
+        }
+
+        /* ===== 滑块 (Range Input) ===== */
+        input[type="range"] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 4px;
+            border-radius: 2px;
+            background: var(--ym-border);
+            outline: none;
+            transition: background 0.3s;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--ym-gold);
+            cursor: pointer;
+            border: 2px solid var(--ym-bg-body);
+            box-shadow: 0 0 12px rgba(212, 160, 64, 0.3);
+            transition: all var(--ym-transition);
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.15);
+            box-shadow: 0 0 20px rgba(212, 160, 64, 0.5);
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--ym-gold);
+            cursor: pointer;
+            border: 2px solid var(--ym-bg-body);
+        }
+
+        .slider-container {
+            margin: 8px 0 4px 0;
+        }
+
+        .slider-container .label-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: var(--ym-text-muted);
+            margin-bottom: 2px;
+        }
+
+        .slider-container .label-row .val {
+            color: var(--ym-text-primary);
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 600;
+        }
+
+        .slider-container .label-row .val.gold {
+            color: var(--ym-gold-light);
+        }
+        .slider-container .label-row .val.cyan {
+            color: var(--ym-cyan);
+        }
+        .slider-container .label-row .val.blue {
+            color: var(--ym-blue);
+        }
+
+        /* ===== 公式推导展示 ===== */
+        .formula-chain {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 6px 10px;
+            padding: 12px 14px;
+            background: var(--ym-bg-inset);
+            border-radius: 8px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            border: 1px solid var(--ym-border);
+            margin: 8px 0 4px 0;
+        }
+
+        .formula-chain .step {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            color: var(--ym-text-muted);
+        }
+
+        .formula-chain .step .highlight-gold {
+            color: var(--ym-gold-light);
+            font-weight: 600;
+        }
+
+        .formula-chain .step .highlight-cyan {
+            color: var(--ym-cyan);
+            font-weight: 600;
+        }
+
+        .formula-chain .step .highlight-blue {
+            color: var(--ym-blue);
+            font-weight: 600;
+        }
+
+        .formula-chain .arrow-symbol {
+            color: var(--ym-text-dim);
+            font-size: 16px;
         }
 
         /* ===== 表单控件 ===== */
@@ -939,6 +1049,10 @@
             .flow-chain .arrow {
                 font-size: 14px;
             }
+            .formula-chain {
+                font-size: 11px;
+                padding: 8px 10px;
+            }
         }
 
         @media (max-width: 480px) {
@@ -969,6 +1083,12 @@
             }
             .chart-container-tall {
                 height: 200px;
+            }
+            .formula-chain {
+                font-size: 10px;
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 4px;
             }
         }
 
@@ -1010,6 +1130,9 @@
                 display: none !important;
             }
             .action-bar {
+                display: none !important;
+            }
+            input[type="range"] {
                 display: none !important;
             }
         }
@@ -1178,42 +1301,83 @@
         </div>
 
         <!-- ============================================================
-        TAB 2: 博弈与定价
+        TAB 2: 博弈与定价 (⭐ 增强交互版)
         ============================================================ -->
         <div class="ym-tab-content" id="tab2">
             <div class="ym-grid-2">
+                <!-- 左列：GameBase 博弈均衡 -->
                 <div class="ym-card">
                     <div class="ym-card-header">
-                        <div class="ym-card-title">⚖️ GameBase 博弈均衡 <span class="badge badge-gold">凯利公式</span></div>
+                        <div class="ym-card-title">⚖️ GameBase 博弈均衡 <span class="badge badge-gold">凯利公式 · 交互</span></div>
                     </div>
-                    <div style="font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--ym-text-secondary);background:var(--ym-bg-elevated);padding:10px 14px;border-radius:6px;margin-bottom:12px;">
-                        f* = (b·p − q) / b = (1.0 · 0.50 − 0.50) / 1.0 = <strong style="color:var(--ym-gold-light);">0.000</strong>
+
+                    <!-- 公式推导链条（动态更新） -->
+                    <div class="formula-chain" id="formulaChain">
+                        <span class="step">f* = (<span class="highlight-gold" id="fB">1.00</span> · <span class="highlight-cyan" id="fP">0.50</span> − <span class="highlight-blue" id="fQ">0.50</span>) / <span class="highlight-gold" id="fBDiv">1.00</span></span>
+                        <span class="arrow-symbol">=</span>
+                        <span class="step"><span class="highlight-gold" id="fResult">0.000</span></span>
                     </div>
-                    <div class="ym-grid-2-inner">
+
+                    <!-- 滑块1: 赔率 b -->
+                    <div class="slider-container">
+                        <div class="label-row">
+                            <span>赔率 <i>b</i>（收益/风险比）</span>
+                            <span class="val gold" id="bDisplay">1.00</span>
+                        </div>
+                        <input type="range" id="bSlider" min="0.50" max="3.00" step="0.01" value="1.00" />
+                    </div>
+
+                    <!-- 滑块2: 胜率 p -->
+                    <div class="slider-container">
+                        <div class="label-row">
+                            <span>胜率 <i>p</i>（成功概率）</span>
+                            <span class="val cyan" id="pDisplay">0.50</span>
+                        </div>
+                        <input type="range" id="pSlider" min="0.20" max="0.80" step="0.01" value="0.50" />
+                    </div>
+
+                    <!-- 败率 q (自动计算显示) -->
+                    <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--ym-text-muted);margin-top:4px;padding:0 4px;">
+                        <span>败率 <i>q</i> = 1 − p</span>
+                        <span style="color:var(--ym-text-primary);font-family:'JetBrains Mono',monospace;" id="qDisplay">0.50</span>
+                    </div>
+
+                    <!-- 关键指标卡片 -->
+                    <div class="ym-grid-2-inner" style="margin-top:12px;">
                         <div class="ym-kpi">
-                            <div class="value gold" style="font-size:20px;">0.00</div>
+                            <div class="value gold" style="font-size:20px;" id="kpiFStar">0.00</div>
                             <div class="label">凯利 f* 推荐</div>
                         </div>
                         <div class="ym-kpi">
-                            <div class="value" style="font-size:20px;">29%</div>
+                            <div class="value" style="font-size:20px;" id="kpiHumanRatio">29%</div>
                             <div class="label">人机配比（人工%）</div>
                         </div>
                         <div class="ym-kpi">
-                            <div class="value" style="font-size:20px;">0.40</div>
+                            <div class="value" style="font-size:20px;" id="kpiCoordination">0.40</div>
                             <div class="label">三方协调度</div>
                         </div>
                         <div class="ym-kpi">
-                            <div class="value" style="font-size:20px;">0.40</div>
+                            <div class="value" style="font-size:20px;" id="kpiSupplyDemand">0.40</div>
                             <div class="label">供需均衡点</div>
                         </div>
                     </div>
+
+                    <!-- 人机配比进度条 -->
                     <div style="margin-top:12px;font-size:12px;color:var(--ym-text-dim);">
-                        ⚡ 人机协同配比（人工占比）<strong style="color:var(--ym-text-secondary);">29%</strong>
+                        ⚡ 人机协同配比（人工占比）
                         <span style="display:inline-block;width:60%;height:4px;background:var(--ym-bg-elevated);border-radius:2px;margin-left:8px;vertical-align:middle;overflow:hidden;">
-                            <span style="display:block;width:29%;height:100%;background:var(--ym-gold);border-radius:2px;"></span>
+                            <span id="humanRatioBar" style="display:block;width:29%;height:100%;background:var(--ym-gold);border-radius:2px;transition:width 0.4s ease;"></span>
                         </span>
+                        <span style="font-family:'JetBrains Mono',monospace;font-weight:600;color:var(--ym-gold-light);margin-left:4px;" id="humanRatioLabel">29%</span>
+                    </div>
+
+                    <!-- 凯利结论 -->
+                    <div style="margin-top:10px;padding:8px 12px;background:var(--ym-bg-inset);border-radius:6px;font-size:12px;color:var(--ym-text-muted);border-left:3px solid var(--ym-gold);">
+                        <span id="kellyConclusion">💡 当前配置下，建议不投入（f* ≈ 0），可观望或降低风险偏好。</span>
                     </div>
                 </div>
+
+                <!-- 右列：AirCalc 空域精算定价 -->
                 <div class="ym-card">
                     <div class="ym-card-header">
                         <div class="ym-card-title">💎 AirCalc 空域精算定价 <span class="badge badge-cyan">动态</span></div>
@@ -1232,14 +1396,20 @@
                             <div class="label">高空 6000m+</div>
                         </div>
                         <div class="ym-kpi">
-                            <div class="value danger" style="font-size:18px;">+15%</div>
+                            <div class="value danger" style="font-size:18px;" id="weatherPremium">+15%</div>
                             <div class="label">气象风险溢价</div>
                         </div>
                     </div>
                     <div style="display:flex;justify-content:space-between;margin-top:10px;font-size:12px;color:var(--ym-text-muted);">
-                        <span>⏰ 时段：<strong style="color:var(--ym-text-secondary);">平峰</strong></span>
-                        <span>🌤️ 气象：<strong style="color:var(--ym-text-secondary);">多云</strong></span>
-                        <span>📊 归一综合定价：<strong style="color:var(--ym-gold-light);">0.45</strong></span>
+                        <span>⏰ 时段：<strong style="color:var(--ym-text-secondary);" id="timeSlot">平峰</strong></span>
+                        <span>🌤️ 气象：<strong style="color:var(--ym-text-secondary);" id="weatherSlot">多云</strong></span>
+                        <span>📊 归一综合定价：<strong style="color:var(--ym-gold-light);" id="compositePrice">0.45</strong></span>
+                    </div>
+
+                    <!-- 气象溢价联动说明 -->
+                    <div style="margin-top:12px;padding:8px 12px;background:var(--ym-bg-inset);border-radius:6px;font-size:11px;color:var(--ym-text-muted);">
+                        🌤️ 气象溢价与凯利 f* 联动：f* 越高，风险容忍度越高，溢价系数适当降低。
+                        <span style="display:block;margin-top:2px;color:var(--ym-text-dim);">当前溢价系数：<strong id="weatherMultiplier" style="color:var(--ym-cyan);">1.15x</strong></span>
                     </div>
                 </div>
             </div>
@@ -1376,11 +1546,10 @@
         </div>
 
         <!-- ============================================================
-        TAB 5: 应急调度 (完整移植)
+        TAB 5: 应急调度
         ============================================================ -->
         <div class="ym-tab-content" id="tab5">
             <div class="ym-grid-2">
-                <!-- 左列：状态输入 + 策略匹配 -->
                 <div>
                     <div class="ym-card">
                         <div class="ym-card-header">
@@ -1453,9 +1622,7 @@
                         <div class="ym-card-header">
                             <div class="ym-card-title">📚 策略匹配 · 应急灾害 <span class="badge badge-gold" id="strategyCount">6 种</span></div>
                         </div>
-                        <div id="strategyContainer" class="ym-grid-3">
-                            <!-- 由 JS 动态渲染 -->
-                        </div>
+                        <div id="strategyContainer" class="ym-grid-3"></div>
                         <div class="match-result">
                             <span class="label">当前匹配：</span>
                             <span class="name" id="matchedStrategyName">——</span>
@@ -1465,7 +1632,6 @@
                     </div>
                 </div>
 
-                <!-- 右列：看板 + 历史 -->
                 <div>
                     <div class="ym-card">
                         <div class="ym-card-header">
@@ -1567,7 +1733,7 @@
 
 
     <!-- ============================================================
-    JAVASCRIPT — 完整逻辑
+    JAVASCRIPT
     ============================================================ -->
     <script>
         (function() {
@@ -1606,7 +1772,7 @@
                 icon: '🚨',
                 weight: 10,
                 condition: function(d) { return d.fireLevel >= 7 || (d.disasterType === 'flood' && d.evacuees >
-                    80); }
+                        80); }
             }, {
                 id: 'supply',
                 name: '物资投放型',
@@ -2139,7 +2305,88 @@
             }
 
             // ============================================================
-            // 14. 主题切换
+            // 14. Tab 2 凯利公式交互引擎 (⭐ 新增)
+            // ============================================================
+            function updateKelly() {
+                var b = parseFloat(document.getElementById('bSlider').value);
+                var p = parseFloat(document.getElementById('pSlider').value);
+                var q = 1 - p;
+
+                // 计算 f*
+                var bp = b * p;
+                var fStar = (bp - q) / b;
+                fStar = Math.max(-1, Math.min(1, fStar)); // 限定范围 -1 ~ 1
+
+                // 更新显示
+                document.getElementById('bDisplay').textContent = b.toFixed(2);
+                document.getElementById('pDisplay').textContent = p.toFixed(2);
+                document.getElementById('qDisplay').textContent = q.toFixed(2);
+
+                document.getElementById('fB').textContent = b.toFixed(2);
+                document.getElementById('fP').textContent = p.toFixed(2);
+                document.getElementById('fQ').textContent = q.toFixed(2);
+                document.getElementById('fBDiv').textContent = b.toFixed(2);
+                document.getElementById('fResult').textContent = fStar.toFixed(3);
+
+                document.getElementById('kpiFStar').textContent = fStar.toFixed(3);
+
+                // 人机配比映射: f* 越高，人工占比越低（自动化程度越高）
+                // 映射: f* = -1 ~ 1 → 人工占比 60% ~ 10%
+                var humanRatio = 35 - fStar * 25;
+                humanRatio = Math.max(10, Math.min(60, humanRatio));
+                var humanRatioDisplay = Math.round(humanRatio);
+                document.getElementById('kpiHumanRatio').textContent = humanRatioDisplay + '%';
+                document.getElementById('humanRatioBar').style.width = humanRatioDisplay + '%';
+                document.getElementById('humanRatioLabel').textContent = humanRatioDisplay + '%';
+
+                // 三方协调度: 与 f* 正相关 (0.2 ~ 0.8)
+                var coordination = 0.40 + fStar * 0.40;
+                coordination = Math.max(0.15, Math.min(0.85, coordination));
+                document.getElementById('kpiCoordination').textContent = coordination.toFixed(2);
+
+                // 供需均衡点: 与 f* 正相关 (0.2 ~ 0.7)
+                var supplyDemand = 0.35 + fStar * 0.35;
+                supplyDemand = Math.max(0.15, Math.min(0.75, supplyDemand));
+                document.getElementById('kpiSupplyDemand').textContent = supplyDemand.toFixed(2);
+
+                // 凯利结论
+                var conclusion = document.getElementById('kellyConclusion');
+                if (fStar > 0.15) {
+                    conclusion.textContent = '💡 当前配置有利可图，建议投入 ' + (fStar * 100).toFixed(1) +
+                        '% 仓位，长期增长率最优。';
+                    conclusion.style.borderLeftColor = 'var(--ym-cyan)';
+                } else if (fStar > -0.05) {
+                    conclusion.textContent = '💡 当前配置处于临界状态，建议观望或微调胜率/赔率参数。';
+                    conclusion.style.borderLeftColor = 'var(--ym-gold)';
+                } else {
+                    conclusion.textContent = '💡 当前配置预期亏损，建议降低风险敞口或重新评估策略。';
+                    conclusion.style.borderLeftColor = 'var(--ym-danger)';
+                }
+
+                // 联动更新气象溢价 (f* 越高，风险容忍度越高，溢价降低)
+                var weatherPremium = 15 - fStar * 12;
+                weatherPremium = Math.max(3, Math.min(25, weatherPremium));
+                document.getElementById('weatherPremium').textContent = '+' + Math.round(weatherPremium) + '%';
+                document.getElementById('weatherMultiplier').textContent = (1 + weatherPremium / 100).toFixed(2) + 'x';
+
+                // 时段定价联动
+                var timeSlots = ['低谷', '平峰', '高峰'];
+                var slotIndex = Math.min(2, Math.max(0, Math.floor((fStar + 1) / 2 * 3)));
+                document.getElementById('timeSlot').textContent = timeSlots[slotIndex];
+
+                // 气象状态联动
+                var weathers = ['晴', '多云', '小雨', '雷暴'];
+                var weatherIndex = Math.min(3, Math.max(0, Math.floor((1 - fStar) / 2 * 4)));
+                document.getElementById('weatherSlot').textContent = weathers[weatherIndex];
+
+                // 综合定价 (与 f* 联动)
+                var composite = 0.30 + fStar * 0.25 + Math.random() * 0.05;
+                composite = Math.max(0.20, Math.min(0.70, composite));
+                document.getElementById('compositePrice').textContent = composite.toFixed(2);
+            }
+
+            // ============================================================
+            // 15. 主题切换
             // ============================================================
             var THEME_KEY = 'ym-theme';
 
@@ -2166,7 +2413,7 @@
             }
 
             // ============================================================
-            // 15. Tab 切换
+            // 16. Tab 切换
             // ============================================================
             var tabBtns = document.querySelectorAll('.ym-nav .tab-btn');
             var tabContents = document.querySelectorAll('.ym-tab-content');
@@ -2186,7 +2433,7 @@
             }
 
             // ============================================================
-            // 16. 子Tab切换 (物流)
+            // 17. 子Tab切换 (物流)
             // ============================================================
             var subBtns = document.querySelectorAll('[data-subtab]');
             subBtns.forEach(function(btn) {
@@ -2209,7 +2456,7 @@
             if (defaultSub) defaultSub.click();
 
             // ============================================================
-            // 17. 紧急停机
+            // 18. 紧急停机
             // ============================================================
             document.getElementById('emergencyBtn').addEventListener('click', function() {
                 if (confirm('⚠️ 确认执行紧急停机？所有在途飞行将立即中止！')) {
@@ -2229,7 +2476,7 @@
             });
 
             // ============================================================
-            // 18. 初始化
+            // 19. 初始化
             // ============================================================
             function init() {
                 // 主题
@@ -2242,26 +2489,29 @@
                     btn.addEventListener('click', function() { switchTab(this.dataset.tab); });
                 });
 
-                // 应急表单输入监听
+                // --- 应急调度 ---
                 document.querySelectorAll('#tab5 input, #tab5 select').forEach(function(el) {
                     el.addEventListener('input', renderStrategies);
                     el.addEventListener('change', renderStrategies);
                 });
-
-                // 保存/清空
                 document.getElementById('saveBtn').addEventListener('click', handleSaveEmergency);
                 document.getElementById('clearBtn').addEventListener('click', handleClearEmergency);
-
-                // 导出
                 document.getElementById('exportPdfBtn').addEventListener('click', exportEmergencyPDF);
                 document.getElementById('exportJsonBtn').addEventListener('click', exportEmergencyJSON);
                 document.getElementById('printBtn').addEventListener('click', printEmergencyPage);
 
-                // 初始化图表
+                // --- Tab 2 凯利交互 ---
+                document.getElementById('bSlider').addEventListener('input', updateKelly);
+                document.getElementById('pSlider').addEventListener('input', updateKelly);
+
+                // 初始化凯利计算
+                updateKelly();
+
+                // --- 图表 ---
                 initRadarChart();
                 initEmergencyChart();
 
-                // 首次渲染
+                // --- 首次渲染 ---
                 renderStrategies();
                 renderEmergencyHistory();
                 updateEmergencyChart();
@@ -2273,13 +2523,13 @@
                     renderDashboard();
                 }, 3000);
 
-                console.log('🛩️ Y.Mine · AirMind V2.0 已启动 (应急调度已移植)');
+                console.log('🛩️ Y.Mine · AirMind V2.0 已启动');
                 console.log('📦 纯本地处理 · 数据仅存浏览器');
                 console.log('📧 hellomind-y@outlook.com');
+                console.log('⚖️ 凯利公式交互引擎已启用');
                 console.log('📋 应急记录数:', getEmergencyRecords().length);
             }
 
-            // 页面加载完成后初始化
             if (document.readyState === 'complete') {
                 init();
             } else {
