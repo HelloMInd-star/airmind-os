@@ -5,12 +5,37 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Y.Mine · AirMind V2.0 低空全域调度引擎</title>
 
-    <!-- CDN 资源 -->
-    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js">
+    <!-- ============================================================
+    CDN 资源 - 使用国内稳定镜像 (BootCDN + CDNJS 双保险)
+    如果某个 CDN 加载失败，浏览器会自动尝试下一个（需浏览器支持）
+    ============================================================ -->
+    <!-- 主 CDN: BootCDN (国内快) -->
+    <script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.4.3/echarts.min.js">
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js">
+    <script src="https://cdn.bootcdn.net/ajax/libs/html2canvas/1.4.1/html2canvas.min.js">
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js">
+    <script src="https://cdn.bootcdn.net/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js">
+    </script>
+
+    <!-- 备选: 如果 BootCDN 失败，尝试 CDNJS (备用) -->
+    <script>
+        // 检测 ECharts 是否加载成功，如果失败则尝试备用 CDN
+        if (typeof echarts === 'undefined') {
+            document.write(
+                '<script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.4.3/echarts.min.js"><\/script>'
+                );
+            console.warn('⚠️ BootCDN 加载失败，已切换至 CDNJS 备用源');
+        }
+        if (typeof html2canvas === 'undefined') {
+            document.write(
+                '<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"><\/script>'
+                );
+        }
+        if (typeof jspdf === 'undefined') {
+            document.write(
+                '<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"><\/script>'
+                );
+        }
     </script>
 
     <style>
@@ -889,13 +914,12 @@
         </nav>
 
         <!-- ============================================================
-        TAB 1: 总控态势 (完全对照设计图)
+        TAB 1: 总控态势
         ============================================================ -->
         <div class="ym-tab-content active" id="tab1">
 
             <!-- KPI 行: 6个混合指标 -->
             <div class="ym-grid-6" style="margin-bottom:16px;">
-                <!-- 注意：这里只保留结构和文本标签，数值由 JS 动态更新 -->
                 <div class="ym-kpi">
                     <div class="value success" id="kpiAvailability">99.7%</div>
                     <div class="label">系统可用率</div>
@@ -930,16 +954,14 @@
 
             <!-- 雷达图 + 稳态阈值 + 系统负载 -->
             <div class="ym-grid-2">
-                <!-- 左: 雷达图 -->
                 <div class="ym-card">
                     <div class="ym-card-header">
                         <div class="ym-card-title">🎯 风险-管控-收益 三维评估 <span class="badge badge-purple">实时</span></div>
-                        <span style="font-size:11px;color:var(--ym-text-dim);">风险 0.58 · 管控 0.52 · 收益 0.15</span>
+                        <span style="font-size:11px;color:var(--ym-text-dim);" id="radarSubtitle">风险 0.58 · 管控 0.52 · 收益 0.15</span>
                     </div>
                     <div id="radarChart" class="chart-container"></div>
                 </div>
 
-                <!-- 右: 稳态阈值 + 负载 -->
                 <div>
                     <div class="ym-card">
                         <div class="ym-card-header">
@@ -965,7 +987,6 @@
                         </div>
                     </div>
 
-                    <!-- 系统负载 -->
                     <div class="ym-card">
                         <div class="ym-card-header">
                             <div class="ym-card-title">⚡ 系统负载 <span class="badge badge-blue">实时</span></div>
@@ -1038,7 +1059,7 @@
         </div>
 
         <!-- ============================================================
-        TAB 2: 博弈与定价 (保留)
+        TAB 2: 博弈与定价
         ============================================================ -->
         <div class="ym-tab-content" id="tab2">
             <div class="ym-grid-2">
@@ -1106,7 +1127,7 @@
         </div>
 
         <!-- ============================================================
-        TAB 3: 物流与算力 (精简保留)
+        TAB 3: 物流与算力
         ============================================================ -->
         <div class="ym-tab-content" id="tab3">
             <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
@@ -1238,7 +1259,7 @@
         </div>
 
         <!-- ============================================================
-        TAB 5: 应急调度 (保留框架)
+        TAB 5: 应急调度
         ============================================================ -->
         <div class="ym-tab-content" id="tab5">
             <div class="ym-card">
@@ -1258,7 +1279,7 @@
         </div>
 
         <!-- ============================================================
-        TAB 6: 系统管理 (保留框架)
+        TAB 6: 系统管理
         ============================================================ -->
         <div class="ym-tab-content" id="tab6">
             <div class="ym-grid-2">
@@ -1320,7 +1341,7 @@
 
 
     <!-- ============================================================
-    JAVASCRIPT — 核心升级：数据驱动 + 实时模拟
+    JAVASCRIPT — 完整数据驱动逻辑
     ============================================================ -->
     <script>
         (function() {
@@ -1330,7 +1351,6 @@
             // 1. 数据存储 (Data Store)
             // ============================================================
             const store = {
-                // KPI
                 availability: 99.7,
                 tasks: 1284,
                 latency: 3.2,
@@ -1338,60 +1358,44 @@
                 nodesTotal: 1000,
                 assets: 12.4,
                 equilibrium: 0.48,
-
-                // 雷达图数据
                 radarRisk: 0.58,
                 radarCredit: 0.42,
                 radarYield: 0.30,
                 radarLiquidity: 0.45,
                 radarCompliance: 0.52,
-
-                // 负载
                 cpu: 72,
                 mem: 58,
                 net: 89,
-
-                // 流转链路
                 ingest: 2.4,
                 decision: 98,
             };
 
             // ============================================================
-            // 2. 模拟数据引擎 (Simulator)
+            // 2. 模拟数据引擎
             // ============================================================
             function simulateData() {
-                // KPI 随机游走（在合理范围内波动）
                 store.availability = Math.min(99.99, Math.max(99.0, store.availability + (Math.random() - 0.5) * 0.3));
                 store.tasks = Math.floor(Math.max(800, store.tasks + (Math.random() - 0.5) * 15));
                 store.latency = Math.min(4.5, Math.max(1.8, store.latency + (Math.random() - 0.5) * 0.2));
                 store.nodes = Math.floor(Math.min(1000, Math.max(700, store.nodes + (Math.random() - 0.5) * 5)));
                 store.assets = Math.min(15.0, Math.max(10.0, store.assets + (Math.random() - 0.5) * 0.2));
-
-                // 博弈均衡度（核心指标，影响稳态阈值）
                 store.equilibrium = Math.min(0.70, Math.max(0.40, store.equilibrium + (Math.random() - 0.5) * 0.015));
-
-                // 雷达图数据（与均衡度联动）
                 store.radarRisk = Math.min(0.80, Math.max(0.30, 0.58 + (Math.random() - 0.5) * 0.04));
                 store.radarCredit = Math.min(0.70, Math.max(0.30, 0.42 + (Math.random() - 0.5) * 0.04));
                 store.radarYield = Math.min(0.50, Math.max(0.15, 0.30 + (Math.random() - 0.5) * 0.03));
                 store.radarLiquidity = Math.min(0.60, Math.max(0.30, 0.45 + (Math.random() - 0.5) * 0.03));
                 store.radarCompliance = Math.min(0.70, Math.max(0.35, 0.52 + (Math.random() - 0.5) * 0.04));
-
-                // 负载（波动）
                 store.cpu = Math.min(92, Math.max(45, store.cpu + (Math.random() - 0.5) * 4));
                 store.mem = Math.min(85, Math.max(40, store.mem + (Math.random() - 0.5) * 3));
                 store.net = Math.min(95, Math.max(60, store.net + (Math.random() - 0.5) * 4));
-
-                // 流转链路
                 store.ingest = Math.min(3.5, Math.max(1.2, store.ingest + (Math.random() - 0.5) * 0.1));
                 store.decision = Math.min(100, Math.max(85, store.decision + (Math.random() - 0.5) * 2));
             }
 
             // ============================================================
-            // 3. 渲染引擎 (将 Store 数据映射到 DOM)
+            // 3. 渲染引擎
             // ============================================================
             function renderDashboard() {
-                // ----- 更新 KPI -----
                 document.getElementById('kpiAvailability').textContent = store.availability.toFixed(1) + '%';
                 document.getElementById('kpiTasks').textContent = store.tasks.toLocaleString();
                 document.getElementById('kpiLatency').textContent = store.latency.toFixed(1) + 'ms';
@@ -1399,20 +1403,17 @@
                 document.getElementById('kpiAssets').textContent = 'B' + store.assets.toFixed(1) + 'M';
                 document.getElementById('kpiEquilibrium').textContent = store.equilibrium.toFixed(2);
 
-                // 均衡度状态标签
                 const zoneEl = document.getElementById('equilibriumZone');
                 const eq = store.equilibrium;
                 if (eq < 0.60) zoneEl.textContent = '🟢 安全区';
                 else if (eq < 0.80) zoneEl.textContent = '🟡 预警区';
                 else zoneEl.textContent = '🔴 熔断区';
 
-                // ----- 更新稳态阈值 -----
                 document.getElementById('steadyValue').textContent = eq.toFixed(2);
                 document.getElementById('steadyDisplay').textContent = eq.toFixed(2);
-                const pct = ((eq - 0.40) / 0.40) * 100; // 映射到 0-100%
+                const pct = ((eq - 0.40) / 0.40) * 100;
                 document.getElementById('steadyMarker').style.left = Math.min(Math.max(pct, 5), 95) + '%';
 
-                // ----- 更新系统状态标签 -----
                 const tag = document.getElementById('statusTag');
                 const label = document.getElementById('statusLabel');
                 if (eq < 0.60) {
@@ -1426,7 +1427,6 @@
                     label.textContent = '🔴 高风险';
                 }
 
-                // ----- 更新负载 -----
                 document.getElementById('loadCpu').textContent = Math.round(store.cpu) + '%';
                 document.getElementById('loadCpuBar').style.width = Math.round(store.cpu) + '%';
                 document.getElementById('loadMem').textContent = Math.round(store.mem) + '%';
@@ -1434,12 +1434,14 @@
                 document.getElementById('loadNet').textContent = Math.round(store.net) + '%';
                 document.getElementById('loadNetBar').style.width = Math.round(store.net) + '%';
 
-                // ----- 更新流转链路 -----
                 document.getElementById('flowIngest').textContent = store.ingest.toFixed(1) + 'GB/s';
                 document.getElementById('flowDecision').textContent = store.decision > 95 ? 'Active' : 'Pending';
                 document.getElementById('flowExec').textContent = Math.round(store.decision) + '%';
 
-                // ----- 更新雷达图 (ECharts) -----
+                document.getElementById('radarSubtitle').textContent =
+                    '风险 ' + store.radarRisk.toFixed(2) + ' · 管控 ' + store.radarCompliance.toFixed(2) + ' · 收益 ' +
+                    store.radarYield.toFixed(2);
+
                 if (window.radarChartInstance) {
                     const option = window.radarChartInstance.getOption();
                     if (option && option.series && option.series[0]) {
@@ -1453,21 +1455,23 @@
                         window.radarChartInstance.setOption(option);
                     }
                 }
-
-                // 更新雷达图标题中的数值
-                const radarTitle = document.querySelector('#tab1 .ym-card .ym-card-title + span');
-                if (radarTitle) {
-                    radarTitle.textContent =
-                        `风险 ${store.radarRisk.toFixed(2)} · 管控 ${store.radarCompliance.toFixed(2)} · 收益 ${store.radarYield.toFixed(2)}`;
-                }
             }
 
             // ============================================================
-            // 4. ECharts 雷达图初始化 (仅初始化，数据由 render 更新)
+            // 4. ECharts 雷达图
             // ============================================================
             function initRadarChart() {
                 const dom = document.getElementById('radarChart');
-                if (!dom) return;
+                if (!dom) {
+                    console.warn('⚠️ 雷达图容器未找到，请检查 DOM');
+                    return;
+                }
+                if (typeof echarts === 'undefined') {
+                    console.warn('⚠️ ECharts 未加载，请检查 CDN');
+                    document.getElementById('radarChart').innerHTML =
+                        '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--ym-text-muted);font-size:14px;">📡 ECharts 加载中...</div>';
+                    return;
+                }
                 if (window.radarChartInstance) {
                     window.radarChartInstance.dispose();
                 }
@@ -1481,9 +1485,9 @@
                         borderColor: 'rgba(255,255,255,0.06)',
                         textStyle: { color: '#EDEAE3' },
                         formatter: function(params) {
-                            let res = `<strong>${params.name}</strong><br/>`;
-                            params.value.forEach((v, i) => {
-                                res += `${params.radar.indicator[i].name}：${v}<br/>`;
+                            let res = '<strong>' + params.name + '</strong><br/>';
+                            params.value.forEach(function(v, i) {
+                                res += params.radar.indicator[i].name + '：' + v + '<br/>';
                             });
                             return res;
                         }
@@ -1528,16 +1532,9 @@
                                 store.radarCompliance
                             ],
                             name: '三维评估',
-                            areaStyle: {
-                                color: 'rgba(59,130,246,0.25)'
-                            },
-                            lineStyle: {
-                                color: '#3B82F6',
-                                width: 2
-                            },
-                            itemStyle: {
-                                color: '#3B82F6'
-                            }
+                            areaStyle: { color: 'rgba(59,130,246,0.25)' },
+                            lineStyle: { color: '#3B82F6', width: 2 },
+                            itemStyle: { color: '#3B82F6' }
                         }],
                         symbol: 'circle',
                         symbolSize: 6,
@@ -1551,11 +1548,11 @@
                 });
 
                 const observer = new MutationObserver(function() {
-                    setTimeout(() => {
+                    setTimeout(function() {
                         if (window.radarChartInstance) {
                             window.radarChartInstance.resize();
-                            const isNight = document.documentElement.getAttribute('data-theme') === 'night';
-                            const color = isNight ? '#60A5FA' : '#3B82F6';
+                            var isNight = document.documentElement.getAttribute('data-theme') === 'night';
+                            var color = isNight ? '#60A5FA' : '#3B82F6';
                             window.radarChartInstance.setOption({
                                 series: [{
                                     lineStyle: { color: color },
@@ -1570,74 +1567,74 @@
             }
 
             // ============================================================
-            // 5. 主题切换 (与之前保持一致)
+            // 5. 主题切换
             // ============================================================
-            const THEME_KEY = 'ym-theme';
+            var THEME_KEY = 'ym-theme';
 
             function getPreferredTheme() {
-                const stored = localStorage.getItem(THEME_KEY);
+                var stored = localStorage.getItem(THEME_KEY);
                 if (stored) return stored;
-                const hour = new Date().getHours();
+                var hour = new Date().getHours();
                 return (hour < 6 || hour >= 20) ? 'night' : 'day';
             }
 
             function applyTheme(theme) {
                 document.documentElement.setAttribute('data-theme', theme);
                 localStorage.setItem(THEME_KEY, theme);
-                const btn = document.getElementById('themeToggle');
-                const settingsBtn = document.getElementById('themeToggleSettings');
-                const icon = theme === 'night' ? '☀️' : '🌙';
+                var btn = document.getElementById('themeToggle');
+                var settingsBtn = document.getElementById('themeToggleSettings');
+                var icon = theme === 'night' ? '☀️' : '🌙';
                 if (btn) btn.textContent = icon;
                 if (settingsBtn) settingsBtn.textContent = theme === 'night' ? '☀️ 切换日间模式' : '🌙 切换夜间模式';
             }
 
             function toggleTheme() {
-                const current = document.documentElement.getAttribute('data-theme') || 'day';
+                var current = document.documentElement.getAttribute('data-theme') || 'day';
                 applyTheme(current === 'night' ? 'day' : 'night');
             }
 
             applyTheme(getPreferredTheme());
-            document.getElementById('themeToggle')?.addEventListener('click', toggleTheme);
-            document.getElementById('themeToggleSettings')?.addEventListener('click', toggleTheme);
+            document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+            document.getElementById('themeToggleSettings').addEventListener('click', toggleTheme);
 
             // ============================================================
-            // 6. Tab 切换 (保留)
+            // 6. Tab 切换
             // ============================================================
-            const tabBtns = document.querySelectorAll('.ym-nav .tab-btn');
-            const tabContents = document.querySelectorAll('.ym-tab-content');
+            var tabBtns = document.querySelectorAll('.ym-nav .tab-btn');
+            var tabContents = document.querySelectorAll('.ym-tab-content');
 
             function switchTab(tabId) {
-                tabContents.forEach(c => c.classList.remove('active'));
-                const target = document.getElementById(tabId);
+                tabContents.forEach(function(c) { c.classList.remove('active'); });
+                var target = document.getElementById(tabId);
                 if (target) target.classList.add('active');
-                tabBtns.forEach(b => {
+                tabBtns.forEach(function(b) {
                     b.classList.remove('active');
                     if (b.dataset.tab === tabId) b.classList.add('active');
                 });
-                setTimeout(() => {
+                setTimeout(function() {
                     if (tabId === 'tab1' && window.radarChartInstance) {
                         window.radarChartInstance.resize();
                     }
                 }, 150);
             }
 
-            tabBtns.forEach(btn => {
+            tabBtns.forEach(function(btn) {
                 btn.addEventListener('click', function() {
                     switchTab(this.dataset.tab);
                 });
             });
 
             // ============================================================
-            // 7. 子Tab切换 (物流)
+            // 7. 物流子Tab
             // ============================================================
-            const subBtns = document.querySelectorAll('[data-subtab]');
-            subBtns.forEach(btn => {
+            var subBtns = document.querySelectorAll('[data-subtab]');
+            subBtns.forEach(function(btn) {
                 btn.addEventListener('click', function() {
-                    const targetId = this.dataset.subtab;
-                    document.querySelectorAll('.ym-sub-content').forEach(c => c.style.display = 'none');
-                    const target = document.getElementById(targetId);
+                    var targetId = this.dataset.subtab;
+                    document.querySelectorAll('.ym-sub-content').forEach(function(c) { c.style.display = 'none'; });
+                    var target = document.getElementById(targetId);
                     if (target) target.style.display = 'block';
-                    subBtns.forEach(b => {
+                    subBtns.forEach(function(b) {
                         b.style.background = 'var(--ym-bg-elevated)';
                         b.style.color = 'var(--ym-text-muted)';
                         b.style.border = '1px solid var(--ym-border)';
@@ -1647,42 +1644,40 @@
                     this.style.border = 'none';
                 });
             });
-            const defaultSub = document.querySelector('[data-subtab="logistics-sub1"]');
+            var defaultSub = document.querySelector('[data-subtab="logistics-sub1"]');
             if (defaultSub) defaultSub.click();
 
             // ============================================================
-            // 8. 紧急停机 (保留)
+            // 8. 紧急停机
             // ============================================================
-            document.getElementById('emergencyBtn')?.addEventListener('click', function() {
+            document.getElementById('emergencyBtn').addEventListener('click', function() {
                 if (confirm('⚠️ 确认执行紧急停机？所有在途飞行将立即中止！')) {
-                    const tag = document.getElementById('statusTag');
+                    var tag = document.getElementById('statusTag');
                     tag.className = 'status-tag danger';
                     document.getElementById('statusLabel').textContent = 'EMERGENCY STOP';
                     this.textContent = '⏳ 执行中...';
                     this.disabled = true;
-                    setTimeout(() => {
+                    setTimeout(function() {
                         alert('✅ 紧急停机已执行，所有无人机已进入安全悬停状态。');
                         tag.className = 'status-tag';
                         document.getElementById('statusLabel').textContent = 'SYSTEM STABLE';
-                        this.textContent = '🛑 紧急停机';
-                        this.disabled = false;
+                        document.getElementById('emergencyBtn').textContent = '🛑 紧急停机';
+                        document.getElementById('emergencyBtn').disabled = false;
                     }, 2000);
                 }
             });
 
             // ============================================================
-            // 9. 启动循环（每 2.5 秒刷新一次）
+            // 9. 启动循环
             // ============================================================
-            let isFirstRender = true;
+            var isFirstRender = true;
 
             function tick() {
                 simulateData();
                 renderDashboard();
-
-                // 第一次渲染完成后，确保雷达图已加载
                 if (isFirstRender) {
                     isFirstRender = false;
-                    setTimeout(() => {
+                    setTimeout(function() {
                         if (window.radarChartInstance) window.radarChartInstance.resize();
                     }, 100);
                 }
@@ -1693,16 +1688,28 @@
             // ============================================================
             document.addEventListener('DOMContentLoaded', function() {
                 initRadarChart();
-                // 立即渲染一次
                 tick();
-                // 启动定时器
                 setInterval(tick, 2500);
-
                 console.log('🛩️ Y.Mine · AirMind V2.0 已启动 (数据驱动模式)');
                 console.log('📦 纯本地处理 · 数据仅存浏览器');
                 console.log('📧 hellomind-y@outlook.com');
                 console.log('🌙 当前主题:', document.documentElement.getAttribute('data-theme'));
             });
+
+            // 如果 ECharts 加载失败，显示友好提示
+            if (typeof echarts === 'undefined') {
+                document.addEventListener('DOMContentLoaded', function() {
+                    var radarContainer = document.getElementById('radarChart');
+                    if (radarContainer) {
+                        radarContainer.innerHTML =
+                            '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#6B7A8F;font-size:14px;flex-direction:column;">' +
+                            '<span style="font-size:32px;margin-bottom:8px;">📡</span>' +
+                            'ECharts 加载失败，请检查网络连接<br/>' +
+                            '<span style="font-size:12px;color:#3A4658;">尝试刷新页面或更换网络环境</span>' +
+                            '</div>';
+                    }
+                });
+            }
 
         })();
     </script>
