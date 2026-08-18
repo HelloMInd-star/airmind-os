@@ -5,11 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Y.Mine · AirMind V2.0 低空全域调度引擎</title>
 
-    <!-- ============================================================
-    CDN 资源 - 使用国内稳定镜像 (BootCDN + CDNJS 双保险)
-    如果某个 CDN 加载失败，浏览器会自动尝试下一个（需浏览器支持）
-    ============================================================ -->
-    <!-- 主 CDN: BootCDN (国内快) -->
+    <!-- CDN 资源 - 国内镜像 -->
     <script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.4.3/echarts.min.js">
     </script>
     <script src="https://cdn.bootcdn.net/ajax/libs/html2canvas/1.4.1/html2canvas.min.js">
@@ -17,32 +13,10 @@
     <script src="https://cdn.bootcdn.net/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js">
     </script>
 
-    <!-- 备选: 如果 BootCDN 失败，尝试 CDNJS (备用) -->
-    <script>
-        // 检测 ECharts 是否加载成功，如果失败则尝试备用 CDN
-        if (typeof echarts === 'undefined') {
-            document.write(
-                '<script src="https://cdnjs.cloudflare.com/ajax/libs/echarts/5.4.3/echarts.min.js"><\/script>'
-                );
-            console.warn('⚠️ BootCDN 加载失败，已切换至 CDNJS 备用源');
-        }
-        if (typeof html2canvas === 'undefined') {
-            document.write(
-                '<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"><\/script>'
-                );
-        }
-        if (typeof jspdf === 'undefined') {
-            document.write(
-                '<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"><\/script>'
-                );
-        }
-    </script>
-
     <style>
         /* ================================================================
-               LAYER 1: DESIGN TOKENS (设计令牌)
-               Y.Mine Design System · 深空战舰控制台
-               ================================================================ */
+           LAYER 1: DESIGN TOKENS
+           ================================================================ */
         :root,
         [data-theme="day"] {
             --ym-blue: #3B82F6;
@@ -70,15 +44,9 @@
             --ym-border: rgba(255, 255, 255, 0.06);
             --ym-border-light: rgba(255, 255, 255, 0.10);
             --ym-shadow-card: 0 8px 32px rgba(0, 0, 0, 0.5);
-            --ym-shadow-glow: 0 0 40px rgba(59, 130, 246, 0.05);
-            --ym-band-green: #27AE60;
-            --ym-band-yellow: #F5D76E;
-            --ym-band-red: #EF5350;
-            --ym-band-bg: rgba(255, 255, 255, 0.06);
             --ym-transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
-        /* ===== 夜间暖色模式 ===== */
         [data-theme="night"] {
             --ym-bg-body: #14100C;
             --ym-bg-card: rgba(30, 24, 18, 0.85);
@@ -92,15 +60,14 @@
             --ym-border-light: rgba(255, 248, 240, 0.10);
             --ym-shadow-card: 0 8px 32px rgba(0, 0, 0, 0.7);
             --ym-blue: #60A5FA;
-            --ym-blue-glow: rgba(96, 165, 250, 0.12);
             --ym-gold: #D4A040;
             --ym-gold-light: #F5D76E;
             --ym-cyan: #67E8F9;
         }
 
         /* ================================================================
-               LAYER 2: RESET & BASE
-               ================================================================ */
+           LAYER 2: RESET & BASE
+           ================================================================ */
         *,
         *::before,
         *::after {
@@ -121,7 +88,6 @@
             padding: 0;
             min-height: 100vh;
             -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
             padding-top: 52px;
             transition: background 0.6s ease, color 0.4s ease;
         }
@@ -142,8 +108,8 @@
         }
 
         /* ================================================================
-               LAYER 3: GLOBAL STATUS BAR
-               ================================================================ */
+           LAYER 3: GLOBAL STATUS BAR
+           ================================================================ */
         .ym-status-bar {
             position: fixed;
             top: 0;
@@ -299,18 +265,17 @@
         }
 
         /* ================================================================
-               LAYER 4: LAYOUT SYSTEM
-               ================================================================ */
+           LAYER 4: LAYOUT SYSTEM
+           ================================================================ */
         .ym-app {
             max-width: 1480px;
             margin: 0 auto;
             padding: 16px 24px 40px;
-            transition: padding 0.3s ease;
         }
 
         /* ================================================================
-               LAYER 5: NAV TABS
-               ================================================================ */
+           LAYER 5: NAV TABS
+           ================================================================ */
         .ym-nav {
             display: flex;
             flex-wrap: wrap;
@@ -356,8 +321,8 @@
         }
 
         /* ================================================================
-               LAYER 6: TAB CONTENT
-               ================================================================ */
+           LAYER 6: TAB CONTENT
+           ================================================================ */
         .ym-tab-content {
             display: none;
             animation: fadeIn 0.35s ease;
@@ -379,8 +344,8 @@
         }
 
         /* ================================================================
-               LAYER 7: CARDS & COMPONENTS
-               ================================================================ */
+           LAYER 7: CARDS & COMPONENTS
+           ================================================================ */
         .ym-card {
             background: var(--ym-bg-card);
             backdrop-filter: blur(12px);
@@ -483,9 +448,6 @@
         .ym-kpi .value.purple {
             color: var(--ym-purple);
         }
-        .ym-kpi .value.muted {
-            color: var(--ym-text-muted);
-        }
 
         .ym-kpi .label {
             font-size: 11px;
@@ -538,7 +500,235 @@
             gap: 12px;
         }
 
-        /* ===== 稳态阈值进度条 ===== */
+        /* ===== 表单控件 ===== */
+        .form-group {
+            margin-bottom: 10px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--ym-text-muted);
+            margin-bottom: 2px;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 6px 12px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--ym-border);
+            border-radius: 6px;
+            color: var(--ym-text-primary);
+            font-size: 13px;
+            font-family: inherit;
+            transition: border var(--ym-transition);
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: var(--ym-blue);
+            background: rgba(255, 255, 255, 0.06);
+        }
+
+        /* ===== 按钮 ===== */
+        .btn {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--ym-border);
+            color: var(--ym-text-secondary);
+            padding: 6px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all var(--ym-transition);
+            font-family: inherit;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            line-height: 1.4;
+        }
+
+        .btn:hover {
+            background: var(--ym-bg-hover);
+            border-color: var(--ym-border-light);
+            transform: translateY(-1px);
+        }
+
+        .btn-primary {
+            background: var(--ym-blue);
+            color: #fff;
+            border-color: var(--ym-blue);
+        }
+
+        .btn-primary:hover {
+            background: #2563EB;
+            border-color: #2563EB;
+        }
+
+        .btn-gold {
+            background: var(--ym-gold);
+            color: #0A0E17;
+            border-color: var(--ym-gold);
+        }
+
+        .btn-gold:hover {
+            background: var(--ym-gold-light);
+            border-color: var(--ym-gold-light);
+        }
+
+        .btn-danger {
+            background: rgba(239, 83, 80, 0.10);
+            border-color: rgba(239, 83, 80, 0.20);
+            color: var(--ym-danger);
+        }
+
+        .btn-danger:hover {
+            background: rgba(239, 83, 80, 0.20);
+        }
+
+        .btn-sm {
+            padding: 2px 12px;
+            font-size: 12px;
+        }
+
+        .action-bar {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-top: 6px;
+        }
+
+        /* ===== 策略卡片 ===== */
+        .strategy-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--ym-border);
+            border-radius: 8px;
+            padding: 10px 12px;
+            transition: all var(--ym-transition);
+            cursor: default;
+        }
+
+        .strategy-card .icon {
+            font-size: 16px;
+        }
+
+        .strategy-card .name {
+            font-weight: 500;
+            font-size: 13px;
+            color: var(--ym-text-primary);
+        }
+
+        .strategy-card .desc {
+            font-size: 11px;
+            color: var(--ym-text-muted);
+        }
+
+        .strategy-card.active {
+            border-color: var(--ym-gold);
+            background: var(--ym-gold-glow);
+            box-shadow: 0 0 24px rgba(212, 160, 64, 0.04);
+        }
+
+        /* ===== 匹配结果条 ===== */
+        .match-result {
+            margin-top: 14px;
+            padding: 10px 16px;
+            background: var(--ym-gold-glow);
+            border-radius: 8px;
+            border-left: 4px solid var(--ym-gold);
+            display: flex;
+            flex-wrap: wrap;
+            align-items: baseline;
+            gap: 4px 16px;
+        }
+
+        .match-result .label {
+            color: var(--ym-text-muted);
+            font-size: 12px;
+        }
+
+        .match-result .name {
+            color: var(--ym-gold-light);
+            font-weight: 600;
+        }
+
+        .match-result .desc {
+            color: var(--ym-text-secondary);
+            font-size: 13px;
+        }
+
+        .match-result .conf {
+            margin-left: auto;
+            font-size: 11px;
+            color: var(--ym-text-muted);
+            background: rgba(255, 255, 255, 0.04);
+            padding: 0 12px;
+            border-radius: 20px;
+            line-height: 22px;
+        }
+
+        /* ===== 历史表格 ===== */
+        .history-wrap {
+            max-height: 260px;
+            overflow-y: auto;
+        }
+
+        .history-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+
+        .history-table th {
+            text-align: left;
+            padding: 5px 10px;
+            color: var(--ym-text-muted);
+            border-bottom: 1px solid var(--ym-border);
+            font-weight: 500;
+            font-size: 10px;
+            text-transform: uppercase;
+        }
+
+        .history-table td {
+            padding: 5px 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+            color: var(--ym-text-secondary);
+        }
+
+        .history-table .empty {
+            color: var(--ym-text-dim);
+            text-align: center;
+            padding: 20px 0;
+        }
+
+        .history-table .strategy-tag {
+            display: inline-block;
+            background: var(--ym-gold-glow);
+            color: var(--ym-gold-light);
+            padding: 0 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            line-height: 20px;
+        }
+
+        /* ===== 图表容器 ===== */
+        .chart-container {
+            width: 100%;
+            height: 200px;
+        }
+
+        .chart-container-tall {
+            width: 100%;
+            height: 260px;
+        }
+
+        /* ===== 稳态阈值 ===== */
         .steady-threshold {
             background: var(--ym-bg-inset);
             border-radius: 8px;
@@ -576,14 +766,14 @@
         }
 
         .steady-threshold .track .zone.green {
-            background: var(--ym-band-green);
+            background: #27AE60;
         }
         .steady-threshold .track .zone.yellow {
-            background: var(--ym-band-yellow);
+            background: #F5D76E;
             color: rgba(0, 0, 0, 0.6);
         }
         .steady-threshold .track .zone.red {
-            background: var(--ym-band-red);
+            background: #EF5350;
         }
 
         .steady-threshold .marker {
@@ -676,15 +866,9 @@
             animation-delay: 1.2s;
         }
 
-        /* ===== 雷达图容器 ===== */
-        .chart-container {
-            width: 100%;
-            height: 260px;
-        }
-
         /* ================================================================
-               LAYER 8: RESPONSIVE
-               ================================================================ */
+           LAYER 8: RESPONSIVE
+           ================================================================ */
         @media (max-width: 1200px) {
             .ym-grid-6 {
                 grid-template-columns: repeat(3, 1fr);
@@ -781,95 +965,53 @@
                 font-size: 18px;
             }
             .chart-container {
+                height: 160px;
+            }
+            .chart-container-tall {
                 height: 200px;
             }
         }
 
         /* ================================================================
-               LAYER 9: PRINT STYLES
-               ================================================================ */
+           LAYER 9: PRINT
+           ================================================================ */
         @media print {
             body {
                 padding-top: 0 !important;
                 background: #fff !important;
                 color: #222 !important;
             }
-
             .ym-status-bar {
                 display: none !important;
             }
-
             .ym-nav {
                 display: none !important;
             }
-
             .ym-card {
                 background: #fff !important;
                 border: 1px solid #ddd !important;
                 box-shadow: none !important;
                 backdrop-filter: none !important;
             }
-
             .ym-tab-content {
                 display: block !important;
             }
-
             .ym-tab-content:not(.active) {
                 display: none !important;
             }
-
             .ym-kpi {
                 background: #f5f5f5 !important;
                 border-color: #ddd !important;
             }
-
             .ym-kpi .value {
                 color: #222 !important;
             }
-        }
-
-        /* ================================================================
-               LAYER 10: UTILITIES
-               ================================================================ */
-        .text-muted {
-            color: var(--ym-text-muted);
-        }
-        .text-gold {
-            color: var(--ym-gold-light);
-        }
-        .text-cyan {
-            color: var(--ym-cyan);
-        }
-        .text-danger {
-            color: var(--ym-danger);
-        }
-        .text-success {
-            color: var(--ym-success);
-        }
-        .text-blue {
-            color: var(--ym-blue);
-        }
-
-        .mt-8 {
-            margin-top: 8px;
-        }
-        .mt-12 {
-            margin-top: 12px;
-        }
-        .mb-8 {
-            margin-bottom: 8px;
-        }
-        .mb-16 {
-            margin-bottom: 16px;
-        }
-
-        .flex-between {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .gap-8 {
-            gap: 8px;
+            .btn {
+                display: none !important;
+            }
+            .action-bar {
+                display: none !important;
+            }
         }
     </style>
 </head>
@@ -881,16 +1023,12 @@
     ============================================================ -->
     <header class="ym-status-bar" id="statusBar">
         <div class="left">
-            <div class="brand">
-                🛩️ AirMind <span>V2.0</span>
-            </div>
+            <div class="brand">🛩️ AirMind <span>V2.0</span></div>
             <div class="status-tag" id="statusTag">
                 <span class="dot"></span>
                 <span id="statusLabel">SYSTEM STABLE</span>
             </div>
-            <span class="version">
-                Game-OS V2.1 · <strong id="steadyDisplay">0.50</strong>
-            </span>
+            <span class="version">Game-OS V2.1 · <strong id="steadyDisplay">0.50</strong></span>
         </div>
         <div class="right">
             <button class="theme-toggle" id="themeToggle" title="切换日间/夜间模式">🌙</button>
@@ -917,8 +1055,7 @@
         TAB 1: 总控态势
         ============================================================ -->
         <div class="ym-tab-content active" id="tab1">
-
-            <!-- KPI 行: 6个混合指标 -->
+            <!-- KPI 行 -->
             <div class="ym-grid-6" style="margin-bottom:16px;">
                 <div class="ym-kpi">
                     <div class="value success" id="kpiAvailability">99.7%</div>
@@ -952,16 +1089,15 @@
                 </div>
             </div>
 
-            <!-- 雷达图 + 稳态阈值 + 系统负载 -->
+            <!-- 雷达图 + 稳态阈值 -->
             <div class="ym-grid-2">
                 <div class="ym-card">
                     <div class="ym-card-header">
                         <div class="ym-card-title">🎯 风险-管控-收益 三维评估 <span class="badge badge-purple">实时</span></div>
                         <span style="font-size:11px;color:var(--ym-text-dim);" id="radarSubtitle">风险 0.58 · 管控 0.52 · 收益 0.15</span>
                     </div>
-                    <div id="radarChart" class="chart-container"></div>
+                    <div id="radarChart" class="chart-container-tall"></div>
                 </div>
-
                 <div>
                     <div class="ym-card">
                         <div class="ym-card-header">
@@ -986,7 +1122,6 @@
                             </div>
                         </div>
                     </div>
-
                     <div class="ym-card">
                         <div class="ym-card-header">
                             <div class="ym-card-title">⚡ 系统负载 <span class="badge badge-blue">实时</span></div>
@@ -1031,29 +1166,13 @@
                     <span style="font-size:11px;color:var(--ym-text-dim);">采集 → 计算 → 决策 → 执行</span>
                 </div>
                 <div class="flow-chain">
-                    <div class="node">
-                        <span class="icon">📡</span>
-                        <span class="name">数据采集层</span>
-                        <span class="val" id="flowIngest">2.4GB/s</span>
-                    </div>
+                    <div class="node"><span class="icon">📡</span><span class="name">数据采集层</span><span class="val" id="flowIngest">2.4GB/s</span></div>
                     <span class="arrow">▶</span>
-                    <div class="node">
-                        <span class="icon">⚙️</span>
-                        <span class="name">计算引擎层</span>
-                        <span class="val">AirMind V2</span>
-                    </div>
+                    <div class="node"><span class="icon">⚙️</span><span class="name">计算引擎层</span><span class="val">AirMind V2</span></div>
                     <span class="arrow">▶</span>
-                    <div class="node">
-                        <span class="icon">🧠</span>
-                        <span class="name">决策模型层</span>
-                        <span class="val" id="flowDecision">Active</span>
-                    </div>
+                    <div class="node"><span class="icon">🧠</span><span class="name">决策模型层</span><span class="val" id="flowDecision">Active</span></div>
                     <span class="arrow">▶</span>
-                    <div class="node">
-                        <span class="icon">🚀</span>
-                        <span class="name">执行控制层</span>
-                        <span class="val" id="flowExec">98%</span>
-                    </div>
+                    <div class="node"><span class="icon">🚀</span><span class="name">执行控制层</span><span class="val" id="flowExec">98%</span></div>
                 </div>
             </div>
         </div>
@@ -1134,7 +1253,6 @@
                 <button class="tab-btn" style="background:var(--ym-blue);color:#fff;padding:6px 16px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:500;" data-subtab="logistics-sub1">📋 任务中心</button>
                 <button class="tab-btn" style="background:var(--ym-bg-elevated);color:var(--ym-text-muted);padding:6px 16px;border:1px solid var(--ym-border);border-radius:6px;cursor:pointer;font-size:13px;font-weight:500;" data-subtab="logistics-sub2">⚡ 算力监控</button>
             </div>
-
             <div id="logistics-sub1" class="ym-sub-content">
                 <div class="ym-grid-2">
                     <div class="ym-card">
@@ -1191,7 +1309,6 @@
                     </div>
                 </div>
             </div>
-
             <div id="logistics-sub2" class="ym-sub-content" style="display:none;">
                 <div class="ym-grid-2">
                     <div class="ym-card">
@@ -1259,20 +1376,129 @@
         </div>
 
         <!-- ============================================================
-        TAB 5: 应急调度
+        TAB 5: 应急调度 (完整移植)
         ============================================================ -->
         <div class="ym-tab-content" id="tab5">
-            <div class="ym-card">
-                <div class="ym-card-header"><div class="ym-card-title">🚨 应急调度中心 <span class="badge badge-danger">就绪</span></div></div>
-                <div style="color:var(--ym-text-dim);text-align:center;padding:20px;">
-                    <span style="font-size:40px;display:block;margin-bottom:8px;">🚁</span>
-                    应急调度模块已就绪
-                    <span style="font-size:13px;color:var(--ym-text-muted);display:block;">包含：状态输入 · 策略匹配 · 历史记录 · 图表分析 · PDF/JSON导出</span>
-                    <div style="margin-top:16px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
-                        <span style="background:var(--ym-bg-elevated);padding:4px 14px;border-radius:12px;font-size:12px;color:var(--ym-text-secondary);">✅ 策略引擎</span>
-                        <span style="background:var(--ym-bg-elevated);padding:4px 14px;border-radius:12px;font-size:12px;color:var(--ym-text-secondary);">📊 ECharts 趋势</span>
-                        <span style="background:var(--ym-bg-elevated);padding:4px 14px;border-radius:12px;font-size:12px;color:var(--ym-text-secondary);">📄 PDF 报告</span>
-                        <span style="background:var(--ym-bg-elevated);padding:4px 14px;border-radius:12px;font-size:12px;color:var(--ym-text-secondary);">💾 JSON 导出</span>
+            <div class="ym-grid-2">
+                <!-- 左列：状态输入 + 策略匹配 -->
+                <div>
+                    <div class="ym-card">
+                        <div class="ym-card-header">
+                            <div class="ym-card-title">🎛️ 状态输入 <span class="badge badge-blue" id="inputStatus">就绪</span></div>
+                        </div>
+                        <div class="ym-grid-2-inner">
+                            <div class="form-group">
+                                <label>飞行高度 (m)</label>
+                                <input type="number" id="height" value="100" min="0" />
+                            </div>
+                            <div class="form-group">
+                                <label>飞行速度 (m/s)</label>
+                                <input type="number" id="speed" value="8" min="0" />
+                            </div>
+                            <div class="form-group">
+                                <label>剩余电量 (%)</label>
+                                <input type="number" id="battery" value="85" min="0" max="100" />
+                            </div>
+                            <div class="form-group">
+                                <label>当前风速 (m/s)</label>
+                                <input type="number" id="wind" value="2" min="0" />
+                            </div>
+                            <div class="form-group">
+                                <label>最近障碍物距离 (m)</label>
+                                <input type="number" id="obstacle" value="300" min="0" />
+                            </div>
+                            <div class="form-group">
+                                <label>灾害类型</label>
+                                <select id="disasterType">
+                                    <option value="fire">🔥 火灾</option>
+                                    <option value="flood">🌊 洪水</option>
+                                    <option value="earthquake">🌍 地震</option>
+                                    <option value="other">⚠️ 其他</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>火势等级 (0-10)</label>
+                                <input type="number" id="fireLevel" value="5" min="0" max="10" />
+                            </div>
+                            <div class="form-group">
+                                <label>被困人员</label>
+                                <input type="number" id="trapped" value="30" min="0" />
+                            </div>
+                            <div class="form-group">
+                                <label>物资缺口 (份)</label>
+                                <input type="number" id="supplyGap" value="200" min="0" />
+                            </div>
+                            <div class="form-group">
+                                <label>通信状态</label>
+                                <select id="commStatus">
+                                    <option value="normal">正常</option>
+                                    <option value="interrupted">中断</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>需安置群众</label>
+                                <input type="number" id="evacuees" value="150" min="0" />
+                            </div>
+                            <div class="form-group" style="display:flex; gap:8px; align-items:flex-end;">
+                                <button class="btn btn-primary" id="saveBtn" style="flex:1;">💾 保存记录</button>
+                                <button class="btn btn-danger" id="clearBtn">🗑️ 清空</button>
+                            </div>
+                        </div>
+                        <div style="margin-top:8px; font-size:11px; color:var(--ym-text-dim);">
+                            ⚡ 修改参数，策略匹配将自动更新
+                        </div>
+                    </div>
+
+                    <div class="ym-card">
+                        <div class="ym-card-header">
+                            <div class="ym-card-title">📚 策略匹配 · 应急灾害 <span class="badge badge-gold" id="strategyCount">6 种</span></div>
+                        </div>
+                        <div id="strategyContainer" class="ym-grid-3">
+                            <!-- 由 JS 动态渲染 -->
+                        </div>
+                        <div class="match-result">
+                            <span class="label">当前匹配：</span>
+                            <span class="name" id="matchedStrategyName">——</span>
+                            <span class="desc" id="matchedStrategyDesc"></span>
+                            <span class="conf" id="matchedStrategyConf">置信度 --</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 右列：看板 + 历史 -->
+                <div>
+                    <div class="ym-card">
+                        <div class="ym-card-header">
+                            <div class="ym-card-title">📊 调度数据看板 <span class="badge badge-blue" id="recordCountBadge">0 条</span></div>
+                        </div>
+                        <div id="emergencyChart" class="chart-container"></div>
+                        <div style="display:flex; gap:16px; margin-top:10px; flex-wrap:wrap; font-size:12px; color:var(--ym-text-muted);">
+                            <span>📌 总记录：<strong id="recordCount" style="color:var(--ym-text-primary);">0</strong></span>
+                            <span>📅 最新：<strong id="latestTime" style="color:var(--ym-text-primary);">—</strong></span>
+                        </div>
+                    </div>
+
+                    <div class="ym-card">
+                        <div class="ym-card-header">
+                            <div class="ym-card-title">📋 历史调度记录 <span class="badge badge-gold" id="historyCount">0</span></div>
+                        </div>
+                        <div class="history-wrap">
+                            <table class="history-table">
+                                <thead><tr><th>时间</th><th>灾害</th><th>被困</th><th>策略</th><th style="text-align:right;">操作</th></tr></thead>
+                                <tbody id="historyBody"><tr><td colspan="5" class="empty">暂无记录</td></tr></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="ym-card">
+                        <div class="ym-card-header">
+                            <div class="ym-card-title">📄 报告导出 <span class="badge badge-purple">纯本地</span></div>
+                        </div>
+                        <div class="action-bar">
+                            <button class="btn btn-primary" id="exportPdfBtn">📑 导出 PDF</button>
+                            <button class="btn" id="exportJsonBtn">💾 导出 JSON</button>
+                            <button class="btn" id="printBtn">🖨️ 打印</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1332,7 +1558,7 @@
         </div>
 
         <!-- ===== FOOTER ===== -->
-        <footer style="text-align:center;color:var(--ym-text-dim);font-size:11px;padding:20px 0 8px;border-top:1px solid var(--ym-border);margin-top:12px;transition:border-color 0.4s ease;">
+        <footer style="text-align:center;color:var(--ym-text-dim);font-size:11px;padding:20px 0 8px;border-top:1px solid var(--ym-border);margin-top:12px;">
             Y.Mine · AirMind V2.0 · Game-OS V2.1 · 纯本地处理 · 数据仅存浏览器
             <span style="display:inline-block;margin:0 12px;">|</span>
             <a href="mailto:hellomind-y@outlook.com" style="color:var(--ym-text-muted);text-decoration:none;">hellomind-y@outlook.com</a>
@@ -1341,14 +1567,14 @@
 
 
     <!-- ============================================================
-    JAVASCRIPT — 完整数据驱动逻辑
+    JAVASCRIPT — 完整逻辑
     ============================================================ -->
     <script>
         (function() {
             'use strict';
 
             // ============================================================
-            // 1. 数据存储 (Data Store)
+            // 1. 总控数据存储 (Tab 1)
             // ============================================================
             const store = {
                 availability: 99.7,
@@ -1371,9 +1597,397 @@
             };
 
             // ============================================================
-            // 2. 模拟数据引擎
+            // 2. 应急调度 - 策略库
             // ============================================================
-            function simulateData() {
+            const STRATEGIES = [{
+                id: 'evacuation',
+                name: '优先疏散型',
+                desc: '火势/洪水蔓延快时，立即疏散危险区域',
+                icon: '🚨',
+                weight: 10,
+                condition: function(d) { return d.fireLevel >= 7 || (d.disasterType === 'flood' && d.evacuees >
+                    80); }
+            }, {
+                id: 'supply',
+                name: '物资投放型',
+                desc: '灾区物资短缺时，空投紧急物资',
+                icon: '🎁',
+                weight: 9,
+                condition: function(d) { return d.supplyGap > 150; }
+            }, {
+                id: 'comm',
+                name: '通信恢复型',
+                desc: '通信中断时，派遣无人机中继恢复通信',
+                icon: '📡',
+                weight: 8,
+                condition: function(d) { return d.commStatus === 'interrupted'; }
+            }, {
+                id: 'search',
+                name: '搜救探测型',
+                desc: '有被困人员时，热成像扫描搜索生命迹象',
+                icon: '🔍',
+                weight: 7,
+                condition: function(d) { return d.trapped > 0; }
+            }, {
+                id: 'shelter',
+                name: '安置点分配型',
+                desc: '疏散人数超预期时，启用备用安置点',
+                icon: '🏠',
+                weight: 6,
+                condition: function(d) { return d.evacuees > 100; }
+            }, {
+                id: 'monitor',
+                name: '监测评估型',
+                desc: '持续监测并评估灾害态势，提供数据支持',
+                icon: '📊',
+                weight: 5,
+                condition: function() { return true; }
+            }];
+
+            // ============================================================
+            // 3. 应急调度 - 数据存储 (localStorage)
+            // ============================================================
+            var EMERGENCY_STORAGE_KEY = 'ym_emergency_records';
+
+            function getEmergencyRecords() {
+                try {
+                    var raw = localStorage.getItem(EMERGENCY_STORAGE_KEY);
+                    return raw ? JSON.parse(raw) : [];
+                } catch { return []; }
+            }
+
+            function saveEmergencyRecords(records) {
+                localStorage.setItem(EMERGENCY_STORAGE_KEY, JSON.stringify(records));
+            }
+
+            // ============================================================
+            // 4. 应急调度 - 表单数据读取
+            // ============================================================
+            function getEmergencyFormData() {
+                var v = function(id, def) {
+                    var el = document.getElementById(id);
+                    if (!el) return def;
+                    var val = parseInt(el.value);
+                    return isNaN(val) ? def : val;
+                };
+                return {
+                    height: v('height', 100),
+                    speed: v('speed', 8),
+                    battery: v('battery', 85),
+                    wind: v('wind', 2),
+                    obstacle: v('obstacle', 300),
+                    disasterType: document.getElementById('disasterType') ? document.getElementById('disasterType')
+                        .value : 'fire',
+                    fireLevel: v('fireLevel', 0),
+                    trapped: v('trapped', 0),
+                    supplyGap: v('supplyGap', 0),
+                    commStatus: document.getElementById('commStatus') ? document.getElementById('commStatus')
+                    .value : 'normal',
+                    evacuees: v('evacuees', 0),
+                };
+            }
+
+            // ============================================================
+            // 5. 应急调度 - 策略匹配
+            // ============================================================
+            function matchStrategy(data) {
+                var scored = STRATEGIES.map(function(s) {
+                    var matched = s.condition(data);
+                    var conf = matched ? s.weight : 0;
+                    if (matched) {
+                        if (s.id === 'evacuation' && data.fireLevel >= 8) conf += 2;
+                        if (s.id === 'supply' && data.supplyGap > 300) conf += 2;
+                        if (s.id === 'search' && data.trapped > 50) conf += 2;
+                        if (s.id === 'shelter' && data.evacuees > 200) conf += 2;
+                        conf = Math.min(conf, 12);
+                    }
+                    return { ...s, matched: matched, conf: conf };
+                });
+                var matchedList = scored.filter(function(s) { return s.matched; });
+                if (matchedList.length === 0) {
+                    var fallback = scored.find(function(s) { return s.id === 'monitor'; }) || scored[scored.length -
+                    1];
+                    return { ...fallback, conf: 3 };
+                }
+                matchedList.sort(function(a, b) { return b.conf - a.conf; });
+                return matchedList[0];
+            }
+
+            // ============================================================
+            // 6. 应急调度 - 渲染策略卡片
+            // ============================================================
+            function renderStrategies() {
+                var data = getEmergencyFormData();
+                var matched = matchStrategy(data);
+                var container = document.getElementById('strategyContainer');
+                if (!container) return;
+
+                container.innerHTML = STRATEGIES.map(function(s) {
+                    var active = s.id === matched.id ? 'active' : '';
+                    return '<div class="strategy-card ' + active + '">' +
+                        '<span class="icon">' + s.icon + '</span>' +
+                        '<div class="name">' + s.name + '</div>' +
+                        '<div class="desc">' + s.desc + '</div>' +
+                        '</div>';
+                }).join('');
+
+                document.getElementById('matchedStrategyName').textContent = matched.icon + ' ' + matched.name;
+                document.getElementById('matchedStrategyDesc').textContent = matched.desc;
+                document.getElementById('matchedStrategyConf').textContent = '置信度 ' + matched.conf + '/12';
+                document.getElementById('strategyCount').textContent = STRATEGIES.length + ' 种';
+            }
+
+            // ============================================================
+            // 7. 应急调度 - 渲染历史表格
+            // ============================================================
+            function renderEmergencyHistory() {
+                var records = getEmergencyRecords();
+                var tbody = document.getElementById('historyBody');
+                if (!tbody) return;
+
+                if (records.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="empty">暂无记录</td></tr>';
+                    document.getElementById('historyCount').textContent = '0';
+                    return;
+                }
+
+                var sorted = records.slice().sort(function(a, b) { return b.id - a.id; });
+                var disasterMap = { fire: '🔥 火灾', flood: '🌊 洪水', earthquake: '🌍 地震', other: '⚠️ 其他' };
+
+                tbody.innerHTML = sorted.map(function(r) {
+                    return '<tr>' +
+                        '<td>' + r.timestamp + '</td>' +
+                        '<td>' + (disasterMap[r.disasterType] || r.disasterType) + '</td>' +
+                        '<td>' + r.trapped + '</td>' +
+                        '<td><span class="strategy-tag">' + (r.matchedStrategyName || '—') + '</span></td>' +
+                        '<td style="text-align:right;"><button class="btn btn-danger btn-sm" data-del="' + r
+                        .id + '">删除</button></td>' +
+                        '</tr>';
+                }).join('');
+
+                document.getElementById('historyCount').textContent = records.length;
+
+                tbody.querySelectorAll('[data-del]').forEach(function(btn) {
+                    btn.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        var id = Number(this.dataset.del);
+                        if (confirm('确定删除此记录吗？')) {
+                            var rs = getEmergencyRecords().filter(function(r) { return r.id !== id; });
+                            saveEmergencyRecords(rs);
+                            renderEmergencyHistory();
+                            updateEmergencyChart();
+                        }
+                    });
+                });
+            }
+
+            // ============================================================
+            // 8. 应急调度 - ECharts 图表
+            // ============================================================
+            var emergencyChartInstance = null;
+
+            function initEmergencyChart() {
+                var dom = document.getElementById('emergencyChart');
+                if (!dom) return;
+                if (emergencyChartInstance) emergencyChartInstance.dispose();
+                if (typeof echarts === 'undefined') {
+                    dom.innerHTML =
+                        '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--ym-text-muted);font-size:13px;">📊 ECharts 加载中...</div>';
+                    return;
+                }
+                emergencyChartInstance = echarts.init(dom, 'dark');
+                updateEmergencyChart();
+                window.addEventListener('resize', function() {
+                    if (emergencyChartInstance) emergencyChartInstance.resize();
+                });
+            }
+
+            function updateEmergencyChart() {
+                var records = getEmergencyRecords();
+                var count = records.length;
+                document.getElementById('recordCount').textContent = count;
+                document.getElementById('recordCountBadge').textContent = count + ' 条';
+
+                if (!emergencyChartInstance) return;
+
+                if (count === 0) {
+                    document.getElementById('latestTime').textContent = '—';
+                    emergencyChartInstance.setOption({
+                        title: { text: '暂无数据', left: 'center', top: 'center',
+                            textStyle: { color: '#4A4540', fontSize: 13 } },
+                        xAxis: { show: false },
+                        yAxis: { show: false },
+                        series: []
+                    });
+                    return;
+                }
+
+                var latest = records[records.length - 1];
+                document.getElementById('latestTime').textContent = latest.timestamp;
+
+                var sorted = records.slice().sort(function(a, b) { return a.id - b.id; });
+                var times = sorted.map(function(r) { return (r.timestamp || '').slice(5, 16); });
+                var trappedData = sorted.map(function(r) { return r.trapped || 0; });
+                var supplyData = sorted.map(function(r) { return r.supplyGap || 0; });
+
+                var option = {
+                    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+                    legend: {
+                        data: ['被困人员', '物资缺口'],
+                        textStyle: { color: '#B8BFC9', fontSize: 11 },
+                        top: 0,
+                        right: 0
+                    },
+                    grid: { left: 40, right: 16, top: 32, bottom: 12 },
+                    xAxis: {
+                        type: 'category',
+                        data: times,
+                        axisLabel: { color: '#6B7A8F', fontSize: 10, rotate: times.length > 6 ? 20 : 0 },
+                        axisLine: { lineStyle: { color: '#2A3A5A' } }
+                    },
+                    yAxis: [{
+                        type: 'value',
+                        name: '人数',
+                        nameTextStyle: { color: '#6B7A8F', fontSize: 10 },
+                        axisLabel: { color: '#6B7A8F', fontSize: 10 },
+                        splitLine: { lineStyle: { color: 'rgba(255,255,255,0.04)' } }
+                    }, {
+                        type: 'value',
+                        name: '物资',
+                        nameTextStyle: { color: '#6B7A8F', fontSize: 10 },
+                        axisLabel: { color: '#6B7A8F', fontSize: 10 },
+                        splitLine: { show: false }
+                    }],
+                    series: [{
+                        name: '被困人员',
+                        type: 'bar',
+                        data: trappedData,
+                        color: '#D4A040',
+                        barWidth: '32%',
+                        yAxisIndex: 0,
+                        itemStyle: { borderRadius: [3, 3, 0, 0] }
+                    }, {
+                        name: '物资缺口',
+                        type: 'line',
+                        data: supplyData,
+                        color: '#4DD0E1',
+                        smooth: true,
+                        symbol: 'circle',
+                        symbolSize: 5,
+                        yAxisIndex: 1,
+                        lineStyle: { width: 2 }
+                    }]
+                };
+                emergencyChartInstance.setOption(option, true);
+                emergencyChartInstance.resize();
+            }
+
+            // ============================================================
+            // 9. 应急调度 - 保存/清空
+            // ============================================================
+            function handleSaveEmergency() {
+                var data = getEmergencyFormData();
+                var matched = matchStrategy(data);
+                var record = {
+                    id: Date.now(),
+                    timestamp: new Date().toLocaleString('zh-CN', { hour12: false }),
+                    ...data,
+                    matchedStrategy: matched.id,
+                    matchedStrategyName: matched.name,
+                    matchedConfidence: matched.conf,
+                };
+                var records = getEmergencyRecords();
+                records.push(record);
+                saveEmergencyRecords(records);
+
+                document.getElementById('inputStatus').textContent = '✅ 已保存';
+                document.getElementById('inputStatus').style.color = '#4DD0E1';
+
+                renderEmergencyHistory();
+                updateEmergencyChart();
+
+                setTimeout(function() {
+                    document.getElementById('inputStatus').textContent = '就绪';
+                    document.getElementById('inputStatus').style.color = '';
+                }, 2000);
+            }
+
+            function handleClearEmergency() {
+                var records = getEmergencyRecords();
+                if (records.length === 0) { alert('暂无记录可清空'); return; }
+                if (confirm('⚠️ 确定清空所有历史记录吗？此操作不可撤销！')) {
+                    localStorage.removeItem(EMERGENCY_STORAGE_KEY);
+                    document.getElementById('inputStatus').textContent = '🗑️ 已清空';
+                    document.getElementById('inputStatus').style.color = '#EF5350';
+                    renderEmergencyHistory();
+                    updateEmergencyChart();
+                    setTimeout(function() {
+                        document.getElementById('inputStatus').textContent = '就绪';
+                        document.getElementById('inputStatus').style.color = '';
+                    }, 2000);
+                }
+            }
+
+            // ============================================================
+            // 10. 应急调度 - 导出功能
+            // ============================================================
+            function exportEmergencyPDF() {
+                var btn = document.getElementById('exportPdfBtn');
+                var orig = btn.textContent;
+                btn.textContent = '⏳ 生成中...';
+                btn.disabled = true;
+
+                try {
+                    var element = document.getElementById('app');
+                    html2canvas(element, {
+                        scale: 2,
+                        backgroundColor: '#0A0E17',
+                        useCORS: true,
+                        logging: false,
+                        windowHeight: element.scrollHeight,
+                    }).then(function(canvas) {
+                        var imgData = canvas.toDataURL('image/png');
+                        var pdf = new jspdf.jsPDF('p', 'mm', 'a4');
+                        var w = 210;
+                        var h = (canvas.height * w) / canvas.width;
+                        pdf.addImage(imgData, 'PNG', 0, 0, w, h);
+                        pdf.save('应急调度报告_' + new Date().toISOString().slice(0, 10) + '.pdf');
+                    }).catch(function(err) {
+                        alert('导出 PDF 失败，请检查控制台错误。');
+                        console.error(err);
+                    }).finally(function() {
+                        btn.textContent = orig;
+                        btn.disabled = false;
+                    });
+                } catch (e) {
+                    alert('导出失败，请检查 CDN 是否加载完整。');
+                    btn.textContent = orig;
+                    btn.disabled = false;
+                }
+            }
+
+            function exportEmergencyJSON() {
+                var records = getEmergencyRecords();
+                if (records.length === 0) { alert('暂无数据可导出'); return; }
+                var blob = new Blob([JSON.stringify(records, null, 2)], { type: 'application/json' });
+                var url = URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                a.href = url;
+                a.download = '应急调度记录_' + new Date().toISOString().slice(0, 10) + '.json';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }
+
+            function printEmergencyPage() {
+                window.print();
+            }
+
+            // ============================================================
+            // 11. 总控仪表盘 - 模拟数据引擎
+            // ============================================================
+            function simulateDashboardData() {
                 store.availability = Math.min(99.99, Math.max(99.0, store.availability + (Math.random() - 0.5) * 0.3));
                 store.tasks = Math.floor(Math.max(800, store.tasks + (Math.random() - 0.5) * 15));
                 store.latency = Math.min(4.5, Math.max(1.8, store.latency + (Math.random() - 0.5) * 0.2));
@@ -1393,7 +2007,7 @@
             }
 
             // ============================================================
-            // 3. 渲染引擎
+            // 12. 总控仪表盘 - 渲染
             // ============================================================
             function renderDashboard() {
                 document.getElementById('kpiAvailability').textContent = store.availability.toFixed(1) + '%';
@@ -1403,29 +2017,23 @@
                 document.getElementById('kpiAssets').textContent = 'B' + store.assets.toFixed(1) + 'M';
                 document.getElementById('kpiEquilibrium').textContent = store.equilibrium.toFixed(2);
 
-                const zoneEl = document.getElementById('equilibriumZone');
-                const eq = store.equilibrium;
+                var eq = store.equilibrium;
+                var zoneEl = document.getElementById('equilibriumZone');
                 if (eq < 0.60) zoneEl.textContent = '🟢 安全区';
                 else if (eq < 0.80) zoneEl.textContent = '🟡 预警区';
                 else zoneEl.textContent = '🔴 熔断区';
 
                 document.getElementById('steadyValue').textContent = eq.toFixed(2);
                 document.getElementById('steadyDisplay').textContent = eq.toFixed(2);
-                const pct = ((eq - 0.40) / 0.40) * 100;
+                var pct = ((eq - 0.40) / 0.40) * 100;
                 document.getElementById('steadyMarker').style.left = Math.min(Math.max(pct, 5), 95) + '%';
 
-                const tag = document.getElementById('statusTag');
-                const label = document.getElementById('statusLabel');
-                if (eq < 0.60) {
-                    tag.className = 'status-tag';
-                    label.textContent = 'SYSTEM STABLE';
-                } else if (eq < 0.80) {
-                    tag.className = 'status-tag warning';
-                    label.textContent = '⚠️ 预警中';
-                } else {
-                    tag.className = 'status-tag danger';
-                    label.textContent = '🔴 高风险';
-                }
+                var tag = document.getElementById('statusTag');
+                var label = document.getElementById('statusLabel');
+                if (eq < 0.60) { tag.className = 'status-tag';
+                    label.textContent = 'SYSTEM STABLE'; } else if (eq < 0.80) { tag.className = 'status-tag warning';
+                    label.textContent = '⚠️ 预警中'; } else { tag.className = 'status-tag danger';
+                    label.textContent = '🔴 高风险'; }
 
                 document.getElementById('loadCpu').textContent = Math.round(store.cpu) + '%';
                 document.getElementById('loadCpuBar').style.width = Math.round(store.cpu) + '%';
@@ -1443,49 +2051,43 @@
                     store.radarYield.toFixed(2);
 
                 if (window.radarChartInstance) {
-                    const option = window.radarChartInstance.getOption();
-                    if (option && option.series && option.series[0]) {
-                        option.series[0].data[0].value = [
+                    var opt = window.radarChartInstance.getOption();
+                    if (opt && opt.series && opt.series[0]) {
+                        opt.series[0].data[0].value = [
                             parseFloat(store.radarRisk.toFixed(2)),
                             parseFloat(store.radarCredit.toFixed(2)),
                             parseFloat(store.radarYield.toFixed(2)),
                             parseFloat(store.radarLiquidity.toFixed(2)),
                             parseFloat(store.radarCompliance.toFixed(2))
                         ];
-                        window.radarChartInstance.setOption(option);
+                        window.radarChartInstance.setOption(opt);
                     }
                 }
             }
 
             // ============================================================
-            // 4. ECharts 雷达图
+            // 13. 总控 - ECharts 雷达图
             // ============================================================
             function initRadarChart() {
-                const dom = document.getElementById('radarChart');
-                if (!dom) {
-                    console.warn('⚠️ 雷达图容器未找到，请检查 DOM');
-                    return;
-                }
+                var dom = document.getElementById('radarChart');
+                if (!dom) return;
+                if (window.radarChartInstance) window.radarChartInstance.dispose();
                 if (typeof echarts === 'undefined') {
-                    console.warn('⚠️ ECharts 未加载，请检查 CDN');
-                    document.getElementById('radarChart').innerHTML =
-                        '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--ym-text-muted);font-size:14px;">📡 ECharts 加载中...</div>';
+                    dom.innerHTML =
+                        '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--ym-text-muted);font-size:13px;">📡 ECharts 加载中...</div>';
                     return;
                 }
-                if (window.radarChartInstance) {
-                    window.radarChartInstance.dispose();
-                }
-                const chart = echarts.init(dom, 'dark');
+                var chart = echarts.init(dom, 'dark');
                 window.radarChartInstance = chart;
 
-                const option = {
+                var option = {
                     tooltip: {
                         trigger: 'item',
                         backgroundColor: 'rgba(10,14,23,0.85)',
                         borderColor: 'rgba(255,255,255,0.06)',
                         textStyle: { color: '#EDEAE3' },
                         formatter: function(params) {
-                            let res = '<strong>' + params.name + '</strong><br/>';
+                            var res = '<strong>' + params.name + '</strong><br/>';
                             params.value.forEach(function(v, i) {
                                 res += params.radar.indicator[i].name + '：' + v + '<br/>';
                             });
@@ -1502,22 +2104,10 @@
                         ],
                         shape: 'circle',
                         splitNumber: 4,
-                        axisName: {
-                            color: '#B8BFC9',
-                            fontSize: 11,
-                            fontWeight: 500,
-                        },
-                        splitArea: {
-                            areaStyle: {
-                                color: ['rgba(59,130,246,0.02)', 'rgba(59,130,246,0.04)']
-                            }
-                        },
-                        axisLine: {
-                            lineStyle: { color: 'rgba(255,255,255,0.08)' }
-                        },
-                        splitLine: {
-                            lineStyle: { color: 'rgba(255,255,255,0.04)' }
-                        },
+                        axisName: { color: '#B8BFC9', fontSize: 11, fontWeight: 500 },
+                        splitArea: { areaStyle: { color: ['rgba(59,130,246,0.02)', 'rgba(59,130,246,0.04)'] } },
+                        axisLine: { lineStyle: { color: 'rgba(255,255,255,0.08)' } },
+                        splitLine: { lineStyle: { color: 'rgba(255,255,255,0.04)' } },
                         center: ['50%', '50%'],
                         radius: '70%',
                     },
@@ -1546,28 +2136,10 @@
                 window.addEventListener('resize', function() {
                     if (window.radarChartInstance) window.radarChartInstance.resize();
                 });
-
-                const observer = new MutationObserver(function() {
-                    setTimeout(function() {
-                        if (window.radarChartInstance) {
-                            window.radarChartInstance.resize();
-                            var isNight = document.documentElement.getAttribute('data-theme') === 'night';
-                            var color = isNight ? '#60A5FA' : '#3B82F6';
-                            window.radarChartInstance.setOption({
-                                series: [{
-                                    lineStyle: { color: color },
-                                    itemStyle: { color: color },
-                                    areaStyle: { color: color + '40' }
-                                }]
-                            });
-                        }
-                    }, 200);
-                });
-                observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
             }
 
             // ============================================================
-            // 5. 主题切换
+            // 14. 主题切换
             // ============================================================
             var THEME_KEY = 'ym-theme';
 
@@ -1593,12 +2165,8 @@
                 applyTheme(current === 'night' ? 'day' : 'night');
             }
 
-            applyTheme(getPreferredTheme());
-            document.getElementById('themeToggle').addEventListener('click', toggleTheme);
-            document.getElementById('themeToggleSettings').addEventListener('click', toggleTheme);
-
             // ============================================================
-            // 6. Tab 切换
+            // 15. Tab 切换
             // ============================================================
             var tabBtns = document.querySelectorAll('.ym-nav .tab-btn');
             var tabContents = document.querySelectorAll('.ym-tab-content');
@@ -1612,20 +2180,13 @@
                     if (b.dataset.tab === tabId) b.classList.add('active');
                 });
                 setTimeout(function() {
-                    if (tabId === 'tab1' && window.radarChartInstance) {
-                        window.radarChartInstance.resize();
-                    }
+                    if (tabId === 'tab1' && window.radarChartInstance) window.radarChartInstance.resize();
+                    if (tabId === 'tab5' && emergencyChartInstance) emergencyChartInstance.resize();
                 }, 150);
             }
 
-            tabBtns.forEach(function(btn) {
-                btn.addEventListener('click', function() {
-                    switchTab(this.dataset.tab);
-                });
-            });
-
             // ============================================================
-            // 7. 物流子Tab
+            // 16. 子Tab切换 (物流)
             // ============================================================
             var subBtns = document.querySelectorAll('[data-subtab]');
             subBtns.forEach(function(btn) {
@@ -1648,7 +2209,7 @@
             if (defaultSub) defaultSub.click();
 
             // ============================================================
-            // 8. 紧急停机
+            // 17. 紧急停机
             // ============================================================
             document.getElementById('emergencyBtn').addEventListener('click', function() {
                 if (confirm('⚠️ 确认执行紧急停机？所有在途飞行将立即中止！')) {
@@ -1668,47 +2229,61 @@
             });
 
             // ============================================================
-            // 9. 启动循环
+            // 18. 初始化
             // ============================================================
-            var isFirstRender = true;
+            function init() {
+                // 主题
+                applyTheme(getPreferredTheme());
+                document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+                document.getElementById('themeToggleSettings').addEventListener('click', toggleTheme);
 
-            function tick() {
-                simulateData();
-                renderDashboard();
-                if (isFirstRender) {
-                    isFirstRender = false;
-                    setTimeout(function() {
-                        if (window.radarChartInstance) window.radarChartInstance.resize();
-                    }, 100);
-                }
-            }
+                // Tab 切换
+                tabBtns.forEach(function(btn) {
+                    btn.addEventListener('click', function() { switchTab(this.dataset.tab); });
+                });
 
-            // ============================================================
-            // 10. 初始化
-            // ============================================================
-            document.addEventListener('DOMContentLoaded', function() {
+                // 应急表单输入监听
+                document.querySelectorAll('#tab5 input, #tab5 select').forEach(function(el) {
+                    el.addEventListener('input', renderStrategies);
+                    el.addEventListener('change', renderStrategies);
+                });
+
+                // 保存/清空
+                document.getElementById('saveBtn').addEventListener('click', handleSaveEmergency);
+                document.getElementById('clearBtn').addEventListener('click', handleClearEmergency);
+
+                // 导出
+                document.getElementById('exportPdfBtn').addEventListener('click', exportEmergencyPDF);
+                document.getElementById('exportJsonBtn').addEventListener('click', exportEmergencyJSON);
+                document.getElementById('printBtn').addEventListener('click', printEmergencyPage);
+
+                // 初始化图表
                 initRadarChart();
-                tick();
-                setInterval(tick, 2500);
-                console.log('🛩️ Y.Mine · AirMind V2.0 已启动 (数据驱动模式)');
+                initEmergencyChart();
+
+                // 首次渲染
+                renderStrategies();
+                renderEmergencyHistory();
+                updateEmergencyChart();
+                renderDashboard();
+
+                // 总控数据定时更新
+                setInterval(function() {
+                    simulateDashboardData();
+                    renderDashboard();
+                }, 3000);
+
+                console.log('🛩️ Y.Mine · AirMind V2.0 已启动 (应急调度已移植)');
                 console.log('📦 纯本地处理 · 数据仅存浏览器');
                 console.log('📧 hellomind-y@outlook.com');
-                console.log('🌙 当前主题:', document.documentElement.getAttribute('data-theme'));
-            });
+                console.log('📋 应急记录数:', getEmergencyRecords().length);
+            }
 
-            // 如果 ECharts 加载失败，显示友好提示
-            if (typeof echarts === 'undefined') {
-                document.addEventListener('DOMContentLoaded', function() {
-                    var radarContainer = document.getElementById('radarChart');
-                    if (radarContainer) {
-                        radarContainer.innerHTML =
-                            '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#6B7A8F;font-size:14px;flex-direction:column;">' +
-                            '<span style="font-size:32px;margin-bottom:8px;">📡</span>' +
-                            'ECharts 加载失败，请检查网络连接<br/>' +
-                            '<span style="font-size:12px;color:#3A4658;">尝试刷新页面或更换网络环境</span>' +
-                            '</div>';
-                    }
-                });
+            // 页面加载完成后初始化
+            if (document.readyState === 'complete') {
+                init();
+            } else {
+                document.addEventListener('DOMContentLoaded', init);
             }
 
         })();
