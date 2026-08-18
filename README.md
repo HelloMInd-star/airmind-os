@@ -1,4 +1,4 @@
-# Y\.Mine · AirMind V2\.0
+# Y\.Mine · AirMind V2\.1
 
 **低空全域人机神经协同调度引擎 · Game\-OS V2\.1**
 
