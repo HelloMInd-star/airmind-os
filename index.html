@@ -1678,20 +1678,68 @@
                 <div class="ym-card">
                     <div class="ym-card-header"><div class="ym-card-title">📋 系统管理 <span class="badge badge-gold">配置中心</span></div></div>
                     <div style="display:flex;flex-direction:column;gap:8px;">
-                        <div style="background:var(--ym-bg-elevated);border-radius:6px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;">
-                            <span>🗺️ 空域网格管理</span><span style="font-size:12px;color:var(--ym-text-muted);">禁飞区 · 限高</span>
+                        <div data-cfg="cfg-airspace" style="background:var(--ym-bg-elevated);border-radius:6px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;" title="点击展开">
+                            <span>🗺️ 空域网格管理 <span class="cfg-arrow" style="font-size:10px;color:var(--ym-text-muted);">▾</span></span><span style="font-size:12px;color:var(--ym-text-muted);">禁飞区 · 限高</span>
                         </div>
-                        <div style="background:var(--ym-bg-elevated);border-radius:6px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;">
-                            <span>🏢 企业/机型白名单</span><span style="font-size:12px;color:var(--ym-text-muted);">3 家企业 · 6 种机型</span>
+                        <div id="cfg-airspace" style="display:none;background:rgba(0,0,0,0.18);border:1px dashed var(--ym-border);border-radius:6px;padding:10px 14px;margin:-4px 0 4px;font-size:12px;color:var(--ym-text-secondary);line-height:1.9;">
+                            <table style="width:100%;border-collapse:collapse;font-size:12px;">
+                                <tr><th style="padding:3px 0;color:var(--ym-text-muted);text-align:left;font-weight:400;">区域</th><th style="padding:3px 0;color:var(--ym-text-muted);text-align:left;font-weight:400;">限高</th><th style="padding:3px 0;color:var(--ym-text-muted);text-align:left;font-weight:400;text-align:right;">状态</th></tr>
+                                <tr><td style="padding:3px 0;">市中心核心区</td><td style="padding:3px 0;">0 m</td><td style="padding:3px 0;text-align:right;">🔴 禁飞</td></tr>
+                                <tr><td style="padding:3px 0;">机场净空保护区</td><td style="padding:3px 0;">120 m</td><td style="padding:3px 0;text-align:right;">🟡 限高审批</td></tr>
+                                <tr><td style="padding:3px 0;">城市近郊走廊</td><td style="padding:3px 0;">300 m</td><td style="padding:3px 0;text-align:right;">🟢 开放</td></tr>
+                                <tr><td style="padding:3px 0;">山区 / 水域</td><td style="padding:3px 0;">500 m</td><td style="padding:3px 0;text-align:right;">🟢 开放（报备）</td></tr>
+                            </table>
                         </div>
-                        <div style="background:var(--ym-bg-elevated);border-radius:6px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;">
-                            <span>⚙️ 策略规则引擎</span><span style="font-size:12px;color:var(--ym-text-muted);">6 种策略 · 阈值可调</span>
+                        <div data-cfg="cfg-whitelist" style="background:var(--ym-bg-elevated);border-radius:6px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;" title="点击展开">
+                            <span>🏢 企业/机型白名单 <span class="cfg-arrow" style="font-size:10px;color:var(--ym-text-muted);">▾</span></span><span style="font-size:12px;color:var(--ym-text-muted);">3 家企业 · 6 种机型</span>
                         </div>
-                        <div style="background:var(--ym-bg-elevated);border-radius:6px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;">
-                            <span>💰 定价参数配置</span><span style="font-size:12px;color:var(--ym-text-muted);">分级费率 · 溢价系数</span>
+                        <div id="cfg-whitelist" style="display:none;background:rgba(0,0,0,0.18);border:1px dashed var(--ym-border);border-radius:6px;padding:10px 14px;margin:-4px 0 4px;font-size:12px;color:var(--ym-text-secondary);line-height:1.9;">
+                            <div style="color:var(--ym-text-muted);margin-bottom:4px;">认证企业</div>
+                            顺丰速运（物流干线）· 美团低空（城市配送）· 亿航智能（载人交通）<br/>
+                            <div style="color:var(--ym-text-muted);margin:6px 0 4px;">准入机型</div>
+                            固定翼 FG-07 · 多旋翼 MX-03 · 倾转旋翼 QT-02 · 复合翼 FH-11 · 轻型直升机 ZS-05 · 无人飞艇 FT-01
                         </div>
-                        <div style="background:var(--ym-bg-elevated);border-radius:6px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;border-left:3px solid var(--ym-cyan);">
-                            <span>🔋 电池健康台账</span><span style="font-size:12px;color:var(--ym-cyan);">SOH 监控 · 衰减曲线</span>
+                        <div data-cfg="cfg-rules" style="background:var(--ym-bg-elevated);border-radius:6px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;" title="点击展开">
+                            <span>⚙️ 策略规则引擎 <span class="cfg-arrow" style="font-size:10px;color:var(--ym-text-muted);">▾</span></span><span style="font-size:12px;color:var(--ym-text-muted);">6 种策略 · 阈值可调</span>
+                        </div>
+                        <div id="cfg-rules" style="display:none;background:rgba(0,0,0,0.18);border:1px dashed var(--ym-border);border-radius:6px;padding:10px 14px;margin:-4px 0 4px;font-size:12px;color:var(--ym-text-secondary);line-height:1.9;">
+                            <table style="width:100%;border-collapse:collapse;font-size:12px;">
+                                <tr><th style="padding:3px 0;color:var(--ym-text-muted);text-align:left;font-weight:400;">策略</th><th style="padding:3px 0;color:var(--ym-text-muted);text-align:left;font-weight:400;">触发阈值</th><th style="padding:3px 0;color:var(--ym-text-muted);text-align:left;font-weight:400;text-align:right;">优先级</th></tr>
+                                <tr><td style="padding:3px 0;">🚨 优先疏散型</td><td style="padding:3px 0;">火势/洪水等级 ≥ 7</td><td style="padding:3px 0;text-align:right;">P0</td></tr>
+                                <tr><td style="padding:3px 0;">🔍 搜救探测型</td><td style="padding:3px 0;">被困人员 ≥ 1</td><td style="padding:3px 0;text-align:right;">P0</td></tr>
+                                <tr><td style="padding:3px 0;">📡 通信恢复型</td><td style="padding:3px 0;">通信状态 = 中断</td><td style="padding:3px 0;text-align:right;">P1</td></tr>
+                                <tr><td style="padding:3px 0;">🎁 物资投放型</td><td style="padding:3px 0;">物资缺口 ≥ 50 份</td><td style="padding:3px 0;text-align:right;">P1</td></tr>
+                                <tr><td style="padding:3px 0;">🏠 安置点分配型</td><td style="padding:3px 0;">安置需求 &gt; 容量 80%</td><td style="padding:3px 0;text-align:right;">P2</td></tr>
+                                <tr><td style="padding:3px 0;">📊 监测评估型</td><td style="padding:3px 0;">默认兜底策略</td><td style="padding:3px 0;text-align:right;">P3</td></tr>
+                            </table>
+                        </div>
+                        <div data-cfg="cfg-pricing" style="background:var(--ym-bg-elevated);border-radius:6px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;" title="点击展开">
+                            <span>💰 定价参数配置 <span class="cfg-arrow" style="font-size:10px;color:var(--ym-text-muted);">▾</span></span><span style="font-size:12px;color:var(--ym-text-muted);">分级费率 · 溢价系数</span>
+                        </div>
+                        <div id="cfg-pricing" style="display:none;background:rgba(0,0,0,0.18);border:1px dashed var(--ym-border);border-radius:6px;padding:10px 14px;margin:-4px 0 4px;font-size:12px;color:var(--ym-text-secondary);line-height:1.9;">
+                            <table style="width:100%;border-collapse:collapse;font-size:12px;">
+                                <tr><th style="padding:3px 0;color:var(--ym-text-muted);text-align:left;font-weight:400;">空域层</th><th style="padding:3px 0;color:var(--ym-text-muted);text-align:left;font-weight:400;">基础费率</th><th style="padding:3px 0;color:var(--ym-text-muted);text-align:left;font-weight:400;text-align:right;">说明</th></tr>
+                                <tr><td style="padding:3px 0;">低空 0-500m</td><td style="padding:3px 0;">¥1.38</td><td style="padding:3px 0;text-align:right;">城市末端配送</td></tr>
+                                <tr><td style="padding:3px 0;">中空 500-6000m</td><td style="padding:3px 0;">¥3.22</td><td style="padding:3px 0;text-align:right;">城际干线</td></tr>
+                                <tr><td style="padding:3px 0;">高空 6000m+</td><td style="padding:3px 0;">¥6.32</td><td style="padding:3px 0;text-align:right;">跨城急件</td></tr>
+                            </table>
+                            <div style="margin-top:6px;color:var(--ym-text-muted);">溢价系数</div>
+                            气象：小雨 +15% · 雷雨 +30% ｜ 时段：高峰 ×1.2 · 平峰 ×1.0 · 夜间 ×0.9 ｜ 凯利联动：f* ≥ 0.3 时溢价 −0.1
+                        </div>
+                        <div data-cfg="cfg-battery" style="background:var(--ym-bg-elevated);border-radius:6px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;border-left:3px solid var(--ym-cyan);cursor:pointer;" title="点击展开">
+                            <span>🔋 电池健康台账 <span class="cfg-arrow" style="font-size:10px;color:var(--ym-text-muted);">▾</span></span><span style="font-size:12px;color:var(--ym-cyan);">SOH 监控 · 衰减曲线</span>
+                        </div>
+                        <div id="cfg-battery" style="display:none;background:rgba(0,0,0,0.18);border:1px dashed var(--ym-border);border-radius:6px;padding:10px 14px;margin:-4px 0 4px;font-size:12px;color:var(--ym-text-secondary);line-height:1.9;">
+                            <table style="width:100%;border-collapse:collapse;font-size:12px;">
+                                <tr><th style="padding:3px 0;color:var(--ym-text-muted);text-align:left;font-weight:400;">编号</th><th style="padding:3px 0;color:var(--ym-text-muted);text-align:left;font-weight:400;">SOH</th><th style="padding:3px 0;color:var(--ym-text-muted);text-align:left;font-weight:400;text-align:right;">状态</th></tr>
+                                <tr><td style="padding:3px 0;">BAT-01</td><td style="padding:3px 0;">96%</td><td style="padding:3px 0;text-align:right;">🟢 健康</td></tr>
+                                <tr><td style="padding:3px 0;">BAT-02</td><td style="padding:3px 0;">91%</td><td style="padding:3px 0;text-align:right;">🟢 健康</td></tr>
+                                <tr><td style="padding:3px 0;">BAT-03</td><td style="padding:3px 0;">88%</td><td style="padding:3px 0;text-align:right;">🟢 健康</td></tr>
+                                <tr><td style="padding:3px 0;">BAT-04</td><td style="padding:3px 0;">83%</td><td style="padding:3px 0;text-align:right;">🟢 健康</td></tr>
+                                <tr><td style="padding:3px 0;">BAT-05</td><td style="padding:3px 0;">74%</td><td style="padding:3px 0;text-align:right;">🟡 注意观察</td></tr>
+                                <tr><td style="padding:3px 0;">BAT-06</td><td style="padding:3px 0;">65%</td><td style="padding:3px 0;text-align:right;">🟡 限载运行</td></tr>
+                                <tr><td style="padding:3px 0;">BAT-07</td><td style="padding:3px 0;">52%</td><td style="padding:3px 0;text-align:right;">🔴 停用待换</td></tr>
+                            </table>
                         </div>
                         <div style="background:var(--ym-bg-elevated);border-radius:6px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;border-left:3px solid var(--ym-purple);">
                             <span>🌙 外观设置</span>
@@ -2487,6 +2535,18 @@
                 // Tab 切换
                 tabBtns.forEach(function(btn) {
                     btn.addEventListener('click', function() { switchTab(this.dataset.tab); });
+                });
+
+                // 配置中心手风琴
+                document.querySelectorAll('[data-cfg]').forEach(function(el) {
+                    el.addEventListener('click', function() {
+                        var d = document.getElementById(el.getAttribute('data-cfg'));
+                        if (!d) return;
+                        var open = d.style.display !== 'none';
+                        d.style.display = open ? 'none' : 'block';
+                        var arrow = el.querySelector('.cfg-arrow');
+                        if (arrow) arrow.textContent = open ? '▾' : '▴';
+                    });
                 });
 
                 // --- 应急调度 ---
