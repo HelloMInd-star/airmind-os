@@ -1,10 +1,20 @@
+
 # 🧠 Y.Mine · AirMind V2.1
 ### 低空全域人机神经协同调度引擎 · Game-OS
 
-[!License](LICENSE)
-[!Status](https://github.com/Y-Mine/airmind)
-[!PRs Welcome](CONTRIBUTING.md)
-[!Figma](https://figma.com/...)
+<!-- ========== 🎨 彩色徽章带 ========== -->
+
+![License](https://img.shields.io/badge/License-Apache%202.0-blue?style=for-the-badge&logo=apache)
+![Status](https://img.shields.io/badge/Status-Active-brightgreen?style=for-the-badge&logo=github)
+![PRs](https://img.shields.io/badge/PRs-Welcome-purple?style=for-the-badge&logo=git)
+![Figma](https://img.shields.io/badge/Figma-Design-yellow?style=for-the-badge&logo=figma)
+![JS](https://img.shields.io/badge/JavaScript-ES6+-yellow?style=for-the-badge&logo=javascript)
+![CSS](https://img.shields.io/badge/CSS3-Variables-blueviolet?style=for-the-badge&logo=css3)
+![ECharts](https://img.shields.io/badge/ECharts-5.4-cyan?style=for-the-badge&logo=apacheecharts)
+![Deploy](https://img.shields.io/badge/Deploy-GitHub%20Pages-black?style=for-the-badge&logo=githubpages)
+![Local](https://img.shields.io/badge/Storage-LocalStorage-orange?style=for-the-badge)
+
+<!-- ========== 正文开始 ========== -->
 
 ---
 
@@ -29,16 +39,30 @@ AirMind 是一套**会博弈、懂仿生、能应急**的低空经济决策操�
 
 ---
 
+## 🧠 关于 AirMind
+
+> **我们相信**：低空经济调度不该是僵硬的代码堆砌，而应兼具**生物的适应直觉**与**博弈论的决策理性**。
+
+AirMind 是一套**把空域资源转化为数字资产**的决策操作系统。它不依赖云端，在浏览器本地即可完成从**博弈定价**到**仿生控制**的全链路调度。
+
+### 📦 核心能力矩阵
+
+| 🎯 博弈决策<br><sub>让每一笔交易都盈利</sub> | 🧬 仿生控制<br><sub>让每一次飞行都平稳</sub> | 🔒 数据主权<br><sub>让每一条数据都安全</sub> |
+| :---: | :---: | :---: |
+| **凯利公式驱动**<br>动态计算最优出价与资源配比，避免情绪化决策 | **人体前庭映射**<br>将皮肤风感/视觉修正迁移至飞控，姿态稳如磐石 | **纯本地运算**<br>数据永不离开浏览器，满足企业数据合规要求 |
+| **空域动态定价**<br>气象/时段/拥堵三重溢价模型，让价格随行就市 | **串级双环 PID**<br>外环锁定航线(10Hz)，内环抑制姿态(200Hz) | **零信任架构**<br>无埋点、无追踪、支持一键冷备份导出 |
+
+---
+
 ## 🖼️ 产品预览（截图占位）
 
 > [!TIP]
 > 以下为 UI 示意，实际界面以部署版本为准。
-> 
-> ![总控态势看板](./docs/screenshots/dashboard.png)
-> *图：总控态势 - 全局稳态色带 + 三圈演化雷达图*
-> 
-> ![博弈定价面板](./docs/screenshots/gamebase.png)
-> *图：博弈定价 - 凯利公式实时推导 + 动态溢价配置*
+
+| 总控态势看板 | 博弈定价面板 | 应急调度报告 |
+| :---: | :---: | :---: |
+| ![总控态势](./docs/screenshots/dashboard.png) | ![博弈定价](./docs/screenshots/gamebase.png) | ![应急调度](./docs/screenshots/emergency.png) |
+| *全局稳态色带 + 三圈演化雷达图* | *凯利公式实时推导 + 动态溢价配置* | *策略匹配结果 + PDF 报告导出* |
 
 ---
 
@@ -179,7 +203,7 @@ cd airmind-os
 | **凯利公式实时重算** | ≤ 16ms（每帧刷新，无卡顿） |
 | **PDF 报告生成**（含 3 张 ECharts 图表） | ≤ 1.5s |
 | **电池健康台账批量更新**（1000 条记录） | < 50ms |
-| **策略引擎匹配（6 条规则并行）** | < 10ms |
+| **策略引擎匹配**（6 条规则并行） | < 10ms |
 
 ---
 
@@ -187,11 +211,13 @@ cd airmind-os
 
 展示项目活力，欢迎贡献者加入！
 
-- [ ] **多机协同编队**：支持 1 控多机的仿生蜂群映射算法
-- [ ] **数字孪生地图**：集成 Mapbox GL，可视化禁飞区与实时航线
-- [ ] **私有化部署包**：提供 Docker 镜像，支持 Nginx 反向代理部署
-- [ ] **AI 语音调度**：接入本地 Whisper 模型，支持语音指令下达
-- [ ] **历史数据回放**：支持按时间轴回放空域态势变化
+| 版本 | 规划功能 | 状态 |
+| :--- | :--- | :---: |
+| V2.2 | **多机协同编队**：支持 1 控多机的仿生蜂群映射算法 | 🚧 开发中 |
+| V2.3 | **数字孪生地图**：集成 Mapbox GL，可视化禁飞区与实时航线 | 📋 规划中 |
+| V2.4 | **历史数据回放**：支持按时间轴回放空域态势变化 | 📋 规划中 |
+| V3.0 | **AI 语音调度**：接入本地 Whisper 模型，语音指令下达 | 🔮 远期 |
+| V3.0 | **私有化部署包**：Docker 镜像 + Nginx 反向代理 | 🔮 远期 |
 
 ---
 
@@ -247,8 +273,10 @@ git push origin feature/your-idea
 
 ## 📄 许可证 & 公私分离架构
 
-- **公开层（本仓库）**：采用 **Apache License 2.0**，包含 UI/交互/通用算法，可 GitHub 公开。
-- **私有内核（密封存证）**：包含双层阻尼张量、内外对流矩阵、地层应力模型等核心运筹学算法，不对外开放。
+| 层级 | 内容 | 许可证 |
+| :--- | :--- | :---: |
+| **公开层**（本仓库） | UI/交互/通用算法 | ![License](https://img.shields.io/badge/License-Apache%202.0-blue?style=flat-square&logo=apache) |
+| **私有内核**（密封存证） | 双层阻尼张量、内外对流矩阵、地层应力模型 | 🔒 不公开 |
 
 ---
 
@@ -265,15 +293,4 @@ git push origin feature/your-idea
 
 ---
 
-### 🎨 关于 Mermaid 配色的设计思路
-
-| 颜色 | 色值 | 对应层级 | 设计意图 |
-| :--- | :--- | :--- | :--- |
-| 🔵 **深蓝 (#1e3a5f)** | `fill:#1e3a5f,stroke:#3b82f6` | 用户交互层（UI） | 冷静、科技感，代表人类操作界面 |
-| 🟠 **琥珀金 (#5c3d1a)** | `fill:#5c3d1a,stroke:#d4a040` | 博弈与定价（价值） | 金色象征财富、博弈、资产转化 |
-| 🌊 **墨青 (#1a4a4a)** | `fill:#1a4a4a,stroke:#4dd0e1` | 物流与运力（流动） | 青色代表流动、运输、管道 |
-| 🟣 **暗紫 (#3d1a5c)** | `fill:#3d1a5c,stroke:#a855f7` | 算力/仿生（智能） | 紫色象征 AI、神经、复杂计算 |
-| 🔴 **暗红 (#5c1a1a)** | `fill:#5c1a1a,stroke:#ef5350` | 应急调度（告警） | 红色代表危机、紧急、高优先级 |
-| 🟢 **墨绿 (#1a3d2a)** | `fill:#1a3d2a,stroke:#27ae60` | 基础设施（安全） | 绿色代表数据持久化、健康、稳定 |
-
-
+如果还需要微调某个区块的颜色倾向或增加/删除某些徽章，随时告诉我！😊
