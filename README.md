@@ -327,6 +327,7 @@ npm test        # 等价于 node --test tests/，零依赖，无需 npm install
 | :--- | :--- | :---: |
 | V2.1.1 | 情景注入 + 全链路联动 + Tab3 实算 + Tab4 仿真 | ✅ 已完成 |
 | V2.1.2 | 算法层抽离 + 40 项测试 + 匈牙利全局指派 + 多期蒙特卡洛 | ✅ 已完成 |
+| V2.1.3 | UI 层拆分为 10 个模块 + 修复 ECharts 隐藏容器 0 宽度 bug | ✅ 已完成 |
 | V2.2 | **Agent 编排层**：风控 Agent + Guardrail + 决策轨迹（✅ 已完成）→ 感知 / 定价 / 派单 Agent + 反射循环 | 🚧 进行中 |
 | V2.3 | **数字孪生地图**：接入地图 SDK，可视化禁飞区与实时航线 | 📋 规划中 |
 | V2.4 | **历史数据回放**：按时间轴回放空域态势变化 | 📋 规划中 |
@@ -353,11 +354,21 @@ npm test        # 等价于 node --test tests/，零依赖，无需 npm install
 
 ```
 airmind-os/
-├── index.html                    # 结构 + 样式 + UI 逻辑
-├── assets/
-│   └── js/
-│       └── core/
-│           └── algorithms.js     # 纯算法层（UMD，无 DOM 依赖，可 Node 测试）
+├── index.html                    # 结构 + 样式（约 99KB，已不含业务逻辑）
+├── assets/js/
+│   ├── core/
+│   │   └── algorithms.js         # 纯算法层（UMD，无 DOM 依赖，可 Node 测试）
+│   └── modules/                  # UI 层，按职责拆分，顺序加载
+│       ├── 01-core.js            # 安全存储 / 事件总线 / 情景库 / Toast / 图表主题
+│       ├── 02-matching.js        # 机型库 + 运力匹配（委托算法层）
+│       ├── 03-emergency.js       # 应急调度：策略库 / 存储 / 渲染 / 图表 / 导出
+│       ├── 04-dashboard.js       # 总控仪表盘：数据引擎 / 渲染 / 雷达图
+│       ├── 05-kelly.js           # Tab2 凯利引擎：赔率胜率 → f* → 气象溢价
+│       ├── 06-shell.js           # 主题切换 + Tab 切换（含图表 resize 调度）
+│       ├── 07-logistics.js       # Tab3 渲染 + 风控 Agent + Guardrail + 编排层
+│       ├── 08-montecarlo.js      # Tab2 多期蒙特卡洛风险推演
+│       ├── 09-pid.js             # Tab4 串级 PID 仿真
+│       └── 10-init.js            # 子Tab切换 / 紧急停机 / 应用初始化
 ├── tests/
 │   ├── algorithms.test.js        # 40 项：凯利 / 定价 / 指派 / PID / 应急
 │   └── risk.test.js              # 24 项：风控 Agent / Guardrail
@@ -366,7 +377,18 @@ airmind-os/
 └── LICENSE                       # Apache 2.0
 ```
 
-> **为什么算法单独拆文件，UI 仍留在 index.html？** 算法需要被测试，UI 不需要。而用传统 `<script src>`（而非 ES Module）引入，能保证 `file://` 双击依然可运行——ES Module 会被浏览器的 CORS 策略拦住，那样"双击就能跑"就不成立了。
+> **为什么用传统 `<script src>` 而不是 ES Module？** ES Module 会被浏览器的 CORS 策略拦住 `file://` 请求，那样"双击就能跑"就不成立了。因此各模块不用 IIFE 包裹，顶层 `var` 共享同一全局作用域——所有顶层标识符均已检查，不与 `window` 内置属性冲突。
+
+### 一个隐蔽的图表 bug
+
+「多期风险推演」的图表曾经一直缩在卡片左下角。根因不在 CSS：**ECharts 在 `display:none` 的容器上 `init()` 会拿到 0 宽度**，而切到 Tab2 时又没有 `resize()`，图表就永远停在初始的极小尺寸。
+
+修法两条：
+
+1. **延迟初始化** —— Tab2 的图表不在应用启动时 init，改为首次切到该面板时才 init（此时容器已可见）
+2. **切换即 resize** —— `switchTab` 里为每个面板的图表补上 `resize()` 调用
+
+顺带把高度从 220px 提到 340px、图例改居中并加留白，避免文字被挤压变形。
 
 ---
 

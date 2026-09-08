@@ -1319,7 +1319,7 @@
                     <div class="ym-kpi"><div class="value blue" id="mcBand" style="font-size:18px;">—</div><div class="label">P10 ~ P90 区间</div></div>
                     <div class="ym-kpi"><div class="value" id="mcGeo" style="font-size:18px;">—</div><div class="label">每期几何增长</div></div>
                 </div>
-                <div id="mcChart" style="width:100%;height:340px;min-width:0;"></div>
+                <div id="mcChart" style="width:100%;height:220px;"></div>
                 <div id="mcVerdict" style="margin-top:10px;font-size:12px;padding:8px 12px;border-radius:4px;background:var(--ym-bg-elevated);border-left:3px solid var(--ym-blue);color:var(--ym-text-secondary);"></div>
             </div>
 
@@ -1789,19 +1789,1765 @@
     <!-- ============================================================
     JAVASCRIPT (与原代码完全一致，无任何修改)
     ============================================================ -->
-    <!-- UI 层：按职责拆分，顺序加载。
-         刻意不用 ES Module —— 那样 file:// 会被 CORS 拦住，"双击就能跑"就不成立了。
-         各模块顶层 var 共享同一全局作用域，标识符已检查不与 window 冲突。 -->
-    <script src="assets/js/modules/01-core.js"></script>
-    <script src="assets/js/modules/02-matching.js"></script>
-    <script src="assets/js/modules/03-emergency.js"></script>
-    <script src="assets/js/modules/04-dashboard.js"></script>
-    <script src="assets/js/modules/05-kelly.js"></script>
-    <script src="assets/js/modules/06-shell.js"></script>
-    <script src="assets/js/modules/07-logistics.js"></script>
-    <script src="assets/js/modules/08-montecarlo.js"></script>
-    <script src="assets/js/modules/09-pid.js"></script>
-    <script src="assets/js/modules/10-init.js"></script>
+    <script>
+        (function() {
+            'use strict';
+
+            // ============================================================
+            // 1. 总控数据存储 (Tab 1)
+            // ============================================================
+            // ============================================================
+            // 0. 基础设施：安全存储 / 事件总线 / 全局状态
+            // ============================================================
+            var SCHEMA_VERSION = 3;
+            var NS = 'ym_v3_';
+
+            // localStorage 安全封装：配额保护 + 损坏自愈 + 版本迁移
+            var safeStore = {
+                get: function(key, fallback) {
+                    try {
+                        var raw = localStorage.getItem(NS + key);
+                        if (raw === null) return fallback;
+                        var parsed = JSON.parse(raw);
+                        if (parsed && typeof parsed === 'object' && '__v' in parsed) {
+                            if (parsed.__v !== SCHEMA_VERSION) {
+                                // 版本不一致：隔离旧数据而不是丢弃，便于人工恢复
+                                localStorage.setItem(NS + key + '_bak_v' + parsed.__v, raw);
+                                return fallback;
+                            }
+                            return parsed.data;
+                        }
+                        return parsed;
+                    } catch (e) {
+                        console.warn('[AirMind] 数据损坏已重置:', key, e);
+                        try { localStorage.removeItem(NS + key); } catch (e2) {}
+                        return fallback;
+                    }
+                },
+                set: function(key, value) {
+                    try {
+                        localStorage.setItem(NS + key, JSON.stringify({ __v: SCHEMA_VERSION, data: value }));
+                        return true;
+                    } catch (e) {
+                        var quota = e && (e.name === 'QuotaExceededError' || e.code === 22);
+                        console.warn('[AirMind] 写入失败:', key, e);
+                        if (quota && window.__ymToast) {
+                            window.__ymToast('⚠️ 浏览器存储已满，本次改动未能持久化，请导出备份后清理。', 'danger');
+                        }
+                        return false;
+                    }
+                },
+                remove: function(key) {
+                    try { localStorage.removeItem(NS + key); } catch (e) {}
+                }
+            };
+
+            // 极简事件总线（发布订阅）：让 6 个 Tab 从"各自硬编码"变成"共享一条数据链"
+            var bus = (function() {
+                var map = {};
+                return {
+                    on: function(evt, fn) {
+                        (map[evt] = map[evt] || []).push(fn);
+                        return function() { bus.off(evt, fn); };
+                    },
+                    off: function(evt, fn) {
+                        if (!map[evt]) return;
+                        map[evt] = map[evt].filter(function(f) { return f !== fn; });
+                    },
+                    emit: function(evt, payload) {
+                        (map[evt] || []).forEach(function(fn) {
+                            try { fn(payload); } catch (e) { console.error('[AirMind] 监听器异常:', evt, e); }
+                        });
+                    }
+                };
+            })();
+
+            // 情景库：README 里那场"暴雨调度"现在是可复现的按钮
+            var SCENARIOS = {
+                normal:   { label: '🟢 常态巡航', weather: 'clear',  weatherIdx: 0, demand: 1.00, congestion: 0.45, windBase: 2,  p: 0.62, b: 1.60, note: '空域通畅，运力与需求基本平衡。' },
+                storm:    { label: '🌧️ 暴雨突至', weather: 'storm',  weatherIdx: 3, demand: 1.55, congestion: 0.85, windBase: 15, p: 0.40, b: 1.30, note: '30 架次延误，起降点拥堵 85%，气象溢价拉满。' },
+                peak:     { label: '🔥 大促高峰', weather: 'cloudy', weatherIdx: 1, demand: 1.90, congestion: 0.72, windBase: 5,  p: 0.58, b: 2.10, note: '订单量激增 90%，高频短途占比上升，注意避免亏本接单。' },
+                lockdown: { label: '🚫 空域管制', weather: 'rain',   weatherIdx: 2, demand: 0.55, congestion: 0.25, windBase: 8,  p: 0.30, b: 1.05, note: '大面积禁飞，可用运力骤降，凯利公式建议收缩敞口。' }
+            };
+            var WEATHER_META = [
+                { key: 'clear',  name: '晴',   mult: 1.00 },
+                { key: 'cloudy', name: '多云', mult: 1.06 },
+                { key: 'rain',   name: '小雨', mult: 1.15 },
+                { key: 'storm',  name: '雷暴', mult: 1.30 }
+            ];
+
+            const store = {
+                availability: 99.7,
+                tasks: 1284,
+                latency: 3.2,
+                nodes: 847,
+                nodesTotal: 1000,
+                assets: 12.4,
+                equilibrium: 0.48,
+                radarRisk: 0.58,
+                radarCredit: 0.42,
+                radarYield: 0.30,
+                radarLiquidity: 0.45,
+                radarCompliance: 0.52,
+                cpu: 72,
+                mem: 58,
+                net: 89,
+                ingest: 2.4,
+                decision: 98,
+                // ↓↓↓ 新增：全局共享情景（Tab2 / Tab1 / Tab3 / Tab6 共同读写）
+                scenario: {
+                    key: 'normal',
+                    weatherIdx: 0,
+                    demand: 1.00,
+                    congestion: 0.45,
+                    windBase: 2,
+                    fStar: 0.24,
+                    humanRatio: 29,
+                    weatherMult: 1.00,
+                    slot: '平峰',
+                    composite: 0.30
+                }
+            };
+
+            // 情景写入 → 广播，所有订阅面板同步刷新
+            function targetEquilibrium() {
+                var s = store.scenario;
+                return clamp(0.28 + s.congestion * 0.30 + (s.demand - 1) * 0.18, 0.30, 0.90);
+            }
+
+            function setScenario(key, opts) {
+                var sc = SCENARIOS[key];
+                if (!sc) return;
+                opts = opts || {};
+                var s = store.scenario;
+                s.key = key;
+                s.weatherIdx = sc.weatherIdx;
+                s.demand = sc.demand;
+                s.congestion = sc.congestion;
+                s.windBase = sc.windBase;
+                if (!opts.keepSliders) {
+                    var pb = document.getElementById('bSlider');
+                    var pp = document.getElementById('pSlider');
+                    if (pb) pb.value = sc.b;
+                    if (pp) pp.value = sc.p;
+                }
+                bus.emit('scenario:change', s);
+                updateKelly();          // 用新 b/p 重算凯利，再由它回写溢价
+                renderScenarioBar();
+                recalcLogistics();
+                renderMonteCarlo();
+                store.equilibrium = lerp(store.equilibrium, targetEquilibrium(), 0.9);  // 立即响应，再交给定时器收敛
+                for (var n = 0; n < 12; n++) simulateDashboardData();   // 快进收敛，让 KPI 当帧就反映新情景
+                renderDashboard();
+                if (window.__ymToast) window.__ymToast(sc.label + ' 已注入 · ' + sc.note, key === 'normal' ? 'success' : (key === 'lockdown' ? 'danger' : 'warn'));
+            }
+
+            // 情景条渲染（Tab1 顶部的注入按钮）
+            function renderScenarioBar() {
+                var bar = document.getElementById('scenarioBar');
+                if (!bar) return;
+                bar.querySelectorAll('[data-scenario]').forEach(function(btn) {
+                    var on = btn.dataset.scenario === store.scenario.key;
+                    btn.style.background = on ? 'var(--ym-blue)' : 'var(--ym-bg-elevated)';
+                    btn.style.color = on ? '#fff' : 'var(--ym-text-muted)';
+                    btn.style.border = on ? 'none' : '1px solid var(--ym-border)';
+                    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+                });
+                var desc = document.getElementById('scenarioDesc');
+                if (desc) desc.textContent = SCENARIOS[store.scenario.key].note;
+            }
+
+
+            // ============================================================
+            // 1.5 通用工具：Toast / 图表主题 / 数值辅助
+            // ============================================================
+            function toast(msg, type) {
+                var box = document.getElementById('toastHost');
+                if (!box) { console.log('[AirMind]', msg); return; }
+                var el = document.createElement('div');
+                el.className = 'ym-toast ' + (type || 'info');
+                el.setAttribute('role', 'status');
+                el.textContent = msg;
+                box.appendChild(el);
+                setTimeout(function() {
+                    el.classList.add('out');
+                    setTimeout(function() { if (el.parentNode) el.parentNode.removeChild(el); }, 400);
+                }, 4200);
+            }
+            window.__ymToast = toast;
+
+            var clamp = AirMind.clamp;
+            var lerp = AirMind.lerp;
+
+            // 图表跟随昼夜主题：不再硬编码 'dark'
+            function currentChartTheme() {
+                return (document.documentElement.getAttribute('data-theme') === 'day') ? 'dark' : 'ym-warm';
+            }
+            function chartBase() {
+                var day = document.documentElement.getAttribute('data-theme') !== 'night';
+                return { text: day ? '#B8BFC9' : '#9A8B7A', line: day ? '#2A3A5A' : '#4A3F33', split: day ? 'rgba(255,255,255,0.04)' : 'rgba(255,248,240,0.05)', ink: day ? '#EDEAE3' : '#F0EAE0' };
+            }
+            function rebuildCharts() {
+                initRadarChart();
+                initEmergencyChart();
+                initMcChart(); renderMonteCarlo();
+                if (window.pidChartInstance) { initPidChart(); runPidSim(); }
+            }
+
+            // ============================================================
+            // 1.6 Tab3 机型库 + 运力匹配算法（真算，不再是写死的 96%）
+            // ============================================================
+            var FLEET = [
+                { id: 'FG-07', name: '固定翼 FG-07',     kind: '固定翼',   payload: 10, range: 120, speed: 90,  soh: 92, windMax: 12, unit: 4,  craft: '多点锁平开窗', baseCost: 1.00 },
+                { id: 'MX-03', name: '多旋翼 MX-03',     kind: '多旋翼',   payload: 5,  range: 25,  speed: 45,  soh: 65, windMax: 10, unit: 12, craft: '推拉活动窗',   baseCost: 0.70 },
+                { id: 'QT-02', name: '倾转旋翼 QT-02',   kind: '倾转旋翼', payload: 8,  range: 80,  speed: 120, soh: 58, windMax: 15, unit: 3,  craft: '无锁落地窗',   baseCost: 1.60 },
+                { id: 'FH-11', name: '复合翼 FH-11',     kind: '复合翼',   payload: 6,  range: 60,  speed: 70,  soh: 88, windMax: 13, unit: 6,  craft: '多点锁平开窗', baseCost: 1.15 },
+                { id: 'ZS-05', name: '轻型直升机 ZS-05', kind: '直升机',   payload: 20, range: 200, speed: 160, soh: 74, windMax: 18, unit: 2,  craft: '多点锁平开窗', baseCost: 3.20 },
+                { id: 'AS-09', name: '无人飞艇 AS-09',   kind: '飞艇',     payload: 30, range: 40,  speed: 30,  soh: 83, windMax: 6,  unit: 1,  craft: '无锁落地窗',   baseCost: 0.55 }
+            ];
+            var DEFAULT_ORDERS = [
+                { id: 1021, name: '医疗样本', weight: 5,  distance: 32, deadline: 30, priority: '紧急' },
+                { id: 1022, name: '快递包裹', weight: 12, distance: 18, deadline: 60, priority: '标准' },
+                { id: 1023, name: '外卖餐盒', weight: 3,  distance: 6,  deadline: 20, priority: '普通' },
+                { id: 1024, name: '跨城急件', weight: 8,  distance: 95, deadline: 45, priority: '高优先级' }
+            ];
+            var orders = safeStore.get('orders', null) || DEFAULT_ORDERS.slice();
+            var assignments = safeStore.get('assignments', {}) || {};   // orderId -> fleetId
+
+            function persistOrders() { safeStore.set('orders', orders); safeStore.set('assignments', assignments); }
+
+            // 单层费率 × 距离 × 载重系数 × 气象溢价 × 时段系数
+            function quoteCost(order, ac) { return AirMind.quoteCost(order, ac, store.scenario); }
+
+            // 核心：单机型打分（返回明细，方便解释"为什么是它"）
+            function scoreAircraft(order, ac) { return AirMind.scoreAircraft(order, ac, store.scenario); }
+
+            function matchFleet(order) { return AirMind.rankFleet(order, FLEET, store.scenario); }
+
+            // 全局最优指派（匈牙利）—— 取代逐单贪心，避免高分工单抢占稀缺运力
+            function globalAssign() { return AirMind.assignFleet(orders, FLEET, store.scenario, { minScore: 35 }); }
+
+            // ============================================================
+            // 1.7 Tab4 串级 PID + 仿生窗型 仿真引擎
+            // ============================================================
+            var CRAFT_MODELS = AirMind.CRAFT_MODELS;
+
+            // 外环 10Hz 航线锁定 + 内环 200Hz 姿态抑制，t=1.5s 注入侧风阶跃
+            function simulateCascade(cfg) { return AirMind.simulateCascade(cfg); }
+
+            // ============================================================
+            // 2. 应急调度 - 策略库
+            // ============================================================
+            var STRATEGIES = AirMind.DEFAULT_STRATEGIES;
+
+            // ============================================================
+            // 3. 应急调度 - 数据存储 (localStorage)
+            // ============================================================
+            var EMERGENCY_STORAGE_KEY = 'ym_emergency_records';   // v2 遗留 key，仅用于迁移
+            var EKEY = 'emergency_records';                        // v3 统一命名空间
+
+            function getEmergencyRecords() {
+                // v2 → v3 一次性迁移：老用户的历史记录不会丢
+                if (!safeStore.get('__mig_emg', false)) {
+                    try {
+                        var raw = localStorage.getItem(EMERGENCY_STORAGE_KEY);
+                        if (raw) {
+                            var legacy = JSON.parse(raw);
+                            if (Array.isArray(legacy) && legacy.length) {
+                                safeStore.set(EKEY, legacy);
+                                safeStore.remove(EKEY);
+                                console.log('[AirMind] 已迁移 ' + legacy.length + ' 条历史应急记录');
+                            }
+                        }
+                    } catch (e) {}
+                    safeStore.set('__mig_emg', true);
+                }
+                var rs = safeStore.get(EKEY, []);
+                return Array.isArray(rs) ? rs : [];
+            }
+
+            function saveEmergencyRecords(records) {
+                if (!safeStore.set(EKEY, records)) {
+                    toast('⚠️ 存储写入失败（可能已满），请导出 JSON 备份后清理。', 'danger');
+                }
+            }
+
+            // ============================================================
+            // 4. 应急调度 - 表单数据读取
+            // ============================================================
+            function getEmergencyFormData() {
+                var v = function(id, def) {
+                    var el = document.getElementById(id);
+                    if (!el) return def;
+                    var val = parseInt(el.value);
+                    return isNaN(val) ? def : val;
+                };
+                return {
+                    height: v('height', 100),
+                    speed: v('speed', 8),
+                    battery: v('battery', 85),
+                    wind: v('wind', 2),
+                    obstacle: v('obstacle', 300),
+                    disasterType: document.getElementById('disasterType') ? document.getElementById('disasterType').value : 'fire',
+                    fireLevel: v('fireLevel', 0),
+                    trapped: v('trapped', 0),
+                    supplyGap: v('supplyGap', 0),
+                    commStatus: document.getElementById('commStatus') ? document.getElementById('commStatus').value : 'normal',
+                    evacuees: v('evacuees', 0),
+                };
+            }
+
+            // ============================================================
+            // 5. 应急调度 - 策略匹配
+            // ============================================================
+            function matchStrategy(data) {
+                var top = AirMind.matchStrategy(data, STRATEGIES);
+                var full = STRATEGIES.filter(function(s) { return s.id === top.id; })[0] || STRATEGIES[STRATEGIES.length - 1];
+                return { id: top.id, name: top.name, desc: top.desc, icon: top.icon, conf: top.conf, matched: top.matched, weight: full.weight };
+            }
+
+            // ============================================================
+            // 6. 应急调度 - 渲染策略卡片
+            // ============================================================
+            function renderStrategies() {
+                var data = getEmergencyFormData();
+                var matched = matchStrategy(data);
+                var container = document.getElementById('strategyContainer');
+                if (!container) return;
+
+                container.innerHTML = STRATEGIES.map(function(s) {
+                    var active = s.id === matched.id ? 'active' : '';
+                    return '<div class="strategy-card ' + active + '">' +
+                        '<span class="icon">' + s.icon + '</span>' +
+                        '<div class="name">' + s.name + '</div>' +
+                        '<div class="desc">' + s.desc + '</div>' +
+                        '</div>';
+                }).join('');
+
+                document.getElementById('matchedStrategyName').textContent = matched.icon + ' ' + matched.name;
+                document.getElementById('matchedStrategyDesc').textContent = matched.desc;
+                document.getElementById('matchedStrategyConf').textContent = '置信度 ' + matched.conf + '/12';
+                document.getElementById('strategyCount').textContent = STRATEGIES.length + ' 种';
+            }
+
+            // ============================================================
+            // 7. 应急调度 - 渲染历史表格
+            // ============================================================
+            function renderEmergencyHistory() {
+                var records = getEmergencyRecords();
+                var tbody = document.getElementById('historyBody');
+                if (!tbody) return;
+
+                if (records.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="empty">暂无记录</td></tr>';
+                    document.getElementById('historyCount').textContent = '0';
+                    return;
+                }
+
+                var sorted = records.slice().sort(function(a, b) { return b.id - a.id; });
+                var disasterMap = { fire: '🔥 火灾', flood: '🌊 洪水', earthquake: '🌍 地震', other: '⚠️ 其他' };
+
+                tbody.innerHTML = sorted.map(function(r) {
+                    return '<tr>' +
+                        '<td>' + r.timestamp + '</td>' +
+                        '<td>' + (disasterMap[r.disasterType] || r.disasterType) + '</td>' +
+                        '<td>' + r.trapped + '</td>' +
+                        '<td><span class="strategy-tag">' + (r.matchedStrategyName || '—') + '</span></td>' +
+                        '<td style="text-align:right;"><button class="btn btn-danger btn-sm" data-del="' + r.id + '">删除</button></td>' +
+                        '</tr>';
+                }).join('');
+
+                document.getElementById('historyCount').textContent = records.length;
+
+                tbody.querySelectorAll('[data-del]').forEach(function(btn) {
+                    btn.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        var id = Number(this.dataset.del);
+                        if (confirm('确定删除此记录吗？')) {
+                            var rs = getEmergencyRecords().filter(function(r) { return r.id !== id; });
+                            saveEmergencyRecords(rs);
+                            renderEmergencyHistory();
+                            updateEmergencyChart();
+                        }
+                    });
+                });
+            }
+
+            // ============================================================
+            // 8. 应急调度 - ECharts 图表
+            // ============================================================
+            var emergencyChartInstance = null;
+
+            function initEmergencyChart() {
+                var dom = document.getElementById('emergencyChart');
+                if (!dom) return;
+                if (emergencyChartInstance) emergencyChartInstance.dispose();
+                if (typeof echarts === 'undefined') {
+                    dom.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--ym-text-muted);font-size:13px;">📊 ECharts 加载中...</div>';
+                    return;
+                }
+                emergencyChartInstance = echarts.init(dom, currentChartTheme());
+                updateEmergencyChart();
+                window.addEventListener('resize', function() {
+                    if (emergencyChartInstance) emergencyChartInstance.resize();
+                });
+            }
+
+            function updateEmergencyChart() {
+                var records = getEmergencyRecords();
+                var count = records.length;
+                document.getElementById('recordCount').textContent = count;
+                document.getElementById('recordCountBadge').textContent = count + ' 条';
+
+                if (!emergencyChartInstance) return;
+
+                if (count === 0) {
+                    document.getElementById('latestTime').textContent = '—';
+                    emergencyChartInstance.setOption({
+                        title: { text: '暂无数据', left: 'center', top: 'center',
+                            textStyle: { color: '#4A4540', fontSize: 13 } },
+                        xAxis: { show: false },
+                        yAxis: { show: false },
+                        series: []
+                    });
+                    return;
+                }
+
+                var latest = records[records.length - 1];
+                document.getElementById('latestTime').textContent = latest.timestamp;
+
+                var sorted = records.slice().sort(function(a, b) { return a.id - b.id; });
+                var times = sorted.map(function(r) { return (r.timestamp || '').slice(5, 16); });
+                var trappedData = sorted.map(function(r) { return r.trapped || 0; });
+                var supplyData = sorted.map(function(r) { return r.supplyGap || 0; });
+
+                var option = {
+                    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+                    legend: {
+                        data: ['被困人员', '物资缺口'],
+                        textStyle: { color: chartBase().text, fontSize: 11 },
+                        top: 0,
+                        right: 0
+                    },
+                    grid: { left: 40, right: 16, top: 32, bottom: 12 },
+                    xAxis: {
+                        type: 'category',
+                        data: times,
+                        axisLabel: { color: '#6B7A8F', fontSize: 10, rotate: times.length > 6 ? 20 : 0 },
+                        axisLine: { lineStyle: { color: '#2A3A5A' } }
+                    },
+                    yAxis: [{
+                        type: 'value',
+                        name: '人数',
+                        nameTextStyle: { color: '#6B7A8F', fontSize: 10 },
+                        axisLabel: { color: '#6B7A8F', fontSize: 10 },
+                        splitLine: { lineStyle: { color: 'rgba(255,255,255,0.04)' } }
+                    }, {
+                        type: 'value',
+                        name: '物资',
+                        nameTextStyle: { color: '#6B7A8F', fontSize: 10 },
+                        axisLabel: { color: '#6B7A8F', fontSize: 10 },
+                        splitLine: { show: false }
+                    }],
+                    series: [{
+                        name: '被困人员',
+                        type: 'bar',
+                        data: trappedData,
+                        color: '#D4A040',
+                        barWidth: '32%',
+                        yAxisIndex: 0,
+                        itemStyle: { borderRadius: [3, 3, 0, 0] }
+                    }, {
+                        name: '物资缺口',
+                        type: 'line',
+                        data: supplyData,
+                        color: '#4DD0E1',
+                        smooth: true,
+                        symbol: 'circle',
+                        symbolSize: 5,
+                        yAxisIndex: 1,
+                        lineStyle: { width: 2 }
+                    }]
+                };
+                emergencyChartInstance.setOption(option, true);
+                emergencyChartInstance.resize();
+            }
+
+            // ============================================================
+            // 9. 应急调度 - 保存/清空
+            // ============================================================
+            function handleSaveEmergency() {
+                var data = getEmergencyFormData();
+                var matched = matchStrategy(data);
+                var record = {
+                    id: Date.now(),
+                    timestamp: new Date().toLocaleString('zh-CN', { hour12: false }),
+                    ...data,
+                    matchedStrategy: matched.id,
+                    matchedStrategyName: matched.name,
+                    matchedConfidence: matched.conf,
+                };
+                var records = getEmergencyRecords();
+                records.push(record);
+                saveEmergencyRecords(records);
+
+                document.getElementById('inputStatus').textContent = '✅ 已保存';
+                document.getElementById('inputStatus').style.color = '#4DD0E1';
+
+                renderEmergencyHistory();
+                updateEmergencyChart();
+
+                setTimeout(function() {
+                    document.getElementById('inputStatus').textContent = '就绪';
+                    document.getElementById('inputStatus').style.color = '';
+                }, 2000);
+            }
+
+            function handleClearEmergency() {
+                var records = getEmergencyRecords();
+                if (records.length === 0) { alert('暂无记录可清空'); return; }
+                if (confirm('⚠️ 确定清空所有历史记录吗？此操作不可撤销！')) {
+                    safeStore.remove(EKEY);
+                    document.getElementById('inputStatus').textContent = '🗑️ 已清空';
+                    document.getElementById('inputStatus').style.color = '#EF5350';
+                    renderEmergencyHistory();
+                    updateEmergencyChart();
+                    setTimeout(function() {
+                        document.getElementById('inputStatus').textContent = '就绪';
+                        document.getElementById('inputStatus').style.color = '';
+                    }, 2000);
+                }
+            }
+
+            // ============================================================
+            // 10. 应急调度 - 导出功能
+            // ============================================================
+            function exportEmergencyPDF() {
+                var btn = document.getElementById('exportPdfBtn');
+                var orig = btn.textContent;
+                btn.textContent = '⏳ 生成中...';
+                btn.disabled = true;
+
+                try {
+                    var element = document.getElementById('app');
+                    html2canvas(element, {
+                        scale: 2,
+                        backgroundColor: '#0A0E17',
+                        useCORS: true,
+                        logging: false,
+                        windowHeight: element.scrollHeight,
+                    }).then(function(canvas) {
+                        var imgData = canvas.toDataURL('image/png');
+                        var pdf = new jspdf.jsPDF('p', 'mm', 'a4');
+                        // 长页面按 A4 可印区域切片，避免被压缩成一坨看不清
+                        var margin = 8, pageW = 210, pageH = 297;
+                        var imgW = pageW - margin * 2;
+                        var imgH = (canvas.height * imgW) / canvas.width;
+                        var usable = pageH - margin * 2;
+                        var left = imgH, pos = margin;
+                        pdf.addImage(imgData, 'PNG', margin, pos, imgW, imgH);
+                        left -= usable;
+                        while (left > 0) {
+                            pos -= usable;
+                            pdf.addPage();
+                            pdf.addImage(imgData, 'PNG', margin, pos, imgW, imgH);
+                            left -= usable;
+                        }
+                        var total = pdf.internal.getNumberOfPages();
+                        for (var p = 1; p <= total; p++) {
+                            pdf.setPage(p);
+                            pdf.setFontSize(8);
+                            pdf.setTextColor(140);
+                            pdf.text('Y.Mine AirMind V2.1 · 应急调度报告 · ' + new Date().toLocaleString('zh-CN', { hour12: false }) + ' · 第 ' + p + '/' + total + ' 页', margin, 4);
+                        }
+                        pdf.save('应急调度报告_' + new Date().toISOString().slice(0, 10) + '.pdf');
+                    }).catch(function(err) {
+                        alert('导出 PDF 失败，请检查控制台错误。');
+                        console.error(err);
+                    }).finally(function() {
+                        btn.textContent = orig;
+                        btn.disabled = false;
+                    });
+                } catch (e) {
+                    alert('导出失败，请检查 CDN 是否加载完整。');
+                    btn.textContent = orig;
+                    btn.disabled = false;
+                }
+            }
+
+            function exportEmergencyJSON() {
+                var records = getEmergencyRecords();
+                if (records.length === 0) { alert('暂无数据可导出'); return; }
+                var blob = new Blob([JSON.stringify(records, null, 2)], { type: 'application/json' });
+                var url = URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                a.href = url;
+                a.download = '应急调度记录_' + new Date().toISOString().slice(0, 10) + '.json';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }
+
+            function printEmergencyPage() {
+                window.print();
+            }
+
+            // ============================================================
+            // 11. 总控仪表盘 - 模拟数据引擎
+            // ============================================================
+            function simulateDashboardData() {
+                var s = store.scenario;
+                // 所有指标向「情景目标值」收敛 + 小幅噪声，取代原来的无意义随机游走
+                var targetEq   = targetEquilibrium();
+                var targetTask = 1284 * s.demand;
+                var targetLat  = 3.2 * (1 + (s.demand - 1) * 0.40);
+                var targetNode = clamp(700 + s.demand * 180, 680, 985);
+                var targetAvail = 99.9 - (s.congestion - 0.45) * 0.60 - (s.demand > 1.5 ? 0.30 : 0);
+                var targetAsset = 12.4 * (1 + (s.demand - 1) * 0.35);
+
+                store.equilibrium += (targetEq - store.equilibrium) * 0.12 + (Math.random() - 0.5) * 0.006;
+                store.equilibrium = clamp(store.equilibrium, 0.28, 0.92);
+                store.tasks = Math.floor(lerp(store.tasks, targetTask, 0.15) + (Math.random() - 0.5) * 8);
+                store.latency = clamp(lerp(store.latency, targetLat, 0.15) + (Math.random() - 0.5) * 0.08, 1.6, 9.0);
+                store.nodes = Math.floor(clamp(lerp(store.nodes, targetNode, 0.12) + (Math.random() - 0.5) * 3, 650, 1000));
+                store.availability = clamp(lerp(store.availability, targetAvail, 0.12) + (Math.random() - 0.5) * 0.05, 96.0, 99.99);
+                store.assets = clamp(lerp(store.assets, targetAsset, 0.12) + (Math.random() - 0.5) * 0.06, 6.0, 20.0);
+
+                // 雷达五维同样由情景驱动
+                store.radarRisk       = clamp(0.30 + s.congestion * 0.38 + (1 - s.fStar) * 0.10 + (Math.random() - 0.5) * 0.02, 0.20, 0.95);
+                store.radarCredit     = clamp(0.30 + s.fStar * 0.30 + (Math.random() - 0.5) * 0.02, 0.15, 0.80);
+                store.radarYield      = clamp(0.14 + s.fStar * 0.40 + (s.demand - 1) * 0.10 + (Math.random() - 0.5) * 0.02, 0.05, 0.75);
+                store.radarLiquidity  = clamp(0.55 - s.congestion * 0.30 + (Math.random() - 0.5) * 0.02, 0.12, 0.70);
+                store.radarCompliance = clamp(0.62 - (s.weatherIdx * 0.04) + (Math.random() - 0.5) * 0.02, 0.25, 0.80);
+
+                store.cpu = clamp(store.cpu + (Math.random() - 0.5) * 4, 45, 92);
+                store.mem = clamp(store.mem + (Math.random() - 0.5) * 3, 40, 85);
+                store.net = clamp(store.net + (Math.random() - 0.5) * 4, 60, 95);
+                store.ingest = clamp(store.ingest + (Math.random() - 0.5) * 0.1, 1.2, 3.5);
+                store.decision = clamp(store.decision + (Math.random() - 0.5) * 2, 85, 100);
+            }
+
+            // ============================================================
+            // 12. 总控仪表盘 - 渲染
+            // ============================================================
+            function renderDashboard() {
+                document.getElementById('kpiAvailability').textContent = store.availability.toFixed(1) + '%';
+                document.getElementById('kpiTasks').textContent = store.tasks.toLocaleString();
+                document.getElementById('kpiLatency').textContent = store.latency.toFixed(1) + 'ms';
+                document.getElementById('kpiNodes').textContent = store.nodes + '/' + store.nodesTotal;
+                document.getElementById('kpiAssets').textContent = 'B' + store.assets.toFixed(1) + 'M';
+                document.getElementById('kpiEquilibrium').textContent = store.equilibrium.toFixed(2);
+
+                var eq = store.equilibrium;
+                var zoneEl = document.getElementById('equilibriumZone');
+                if (eq < 0.60) zoneEl.textContent = '🟢 安全区';
+                else if (eq < 0.80) zoneEl.textContent = '🟡 预警区';
+                else zoneEl.textContent = '🔴 熔断区';
+
+                document.getElementById('steadyValue').textContent = eq.toFixed(2);
+                document.getElementById('steadyDisplay').textContent = eq.toFixed(2);
+                var pct = ((eq - 0.40) / 0.40) * 100;
+                document.getElementById('steadyMarker').style.left = Math.min(Math.max(pct, 5), 95) + '%';
+
+                var tag = document.getElementById('statusTag');
+                var label = document.getElementById('statusLabel');
+                if (eq < 0.60) { tag.className = 'status-tag';
+                    label.textContent = 'SYSTEM STABLE'; } else if (eq < 0.80) { tag.className = 'status-tag warning';
+                    label.textContent = '⚠️ 预警中'; } else { tag.className = 'status-tag danger';
+                    label.textContent = '🔴 高风险'; }
+
+                document.getElementById('loadCpu').textContent = Math.round(store.cpu) + '%';
+                document.getElementById('loadCpuBar').style.width = Math.round(store.cpu) + '%';
+                document.getElementById('loadMem').textContent = Math.round(store.mem) + '%';
+                document.getElementById('loadMemBar').style.width = Math.round(store.mem) + '%';
+                document.getElementById('loadNet').textContent = Math.round(store.net) + '%';
+                document.getElementById('loadNetBar').style.width = Math.round(store.net) + '%';
+
+                document.getElementById('flowIngest').textContent = store.ingest.toFixed(1) + 'GB/s';
+                document.getElementById('flowDecision').textContent = store.decision > 95 ? 'Active' : 'Pending';
+                document.getElementById('flowExec').textContent = Math.round(store.decision) + '%';
+
+                document.getElementById('radarSubtitle').textContent =
+                    '风险 ' + store.radarRisk.toFixed(2) + ' · 管控 ' + store.radarCompliance.toFixed(2) + ' · 收益 ' +
+                    store.radarYield.toFixed(2);
+
+                if (window.radarChartInstance) {
+                    var opt = window.radarChartInstance.getOption();
+                    if (opt && opt.series && opt.series[0]) {
+                        opt.series[0].data[0].value = [
+                            parseFloat(store.radarRisk.toFixed(2)),
+                            parseFloat(store.radarCredit.toFixed(2)),
+                            parseFloat(store.radarYield.toFixed(2)),
+                            parseFloat(store.radarLiquidity.toFixed(2)),
+                            parseFloat(store.radarCompliance.toFixed(2))
+                        ];
+                        window.radarChartInstance.setOption(opt);
+                    }
+                }
+            }
+
+            // ============================================================
+            // 13. 总控 - ECharts 雷达图
+            // ============================================================
+            function initRadarChart() {
+                var dom = document.getElementById('radarChart');
+                if (!dom) return;
+                if (window.radarChartInstance) window.radarChartInstance.dispose();
+                if (typeof echarts === 'undefined') {
+                    dom.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--ym-text-muted);font-size:13px;">📡 ECharts 加载中...</div>';
+                    return;
+                }
+                var chart = echarts.init(dom, currentChartTheme());
+                window.radarChartInstance = chart;
+
+                var option = {
+                    tooltip: {
+                        trigger: 'item',
+                        backgroundColor: 'rgba(10,14,23,0.85)',
+                        borderColor: 'rgba(255,255,255,0.06)',
+                        textStyle: { color: '#EDEAE3' },
+                        formatter: function(params) {
+                            var res = '<strong>' + params.name + '</strong><br/>';
+                            params.value.forEach(function(v, i) {
+                                res += params.radar.indicator[i].name + '：' + v + '<br/>';
+                            });
+                            return res;
+                        }
+                    },
+                    radar: {
+                        indicator: [
+                            { name: '市场风险', max: 1 },
+                            { name: '信用风险', max: 1 },
+                            { name: '收益率', max: 1 },
+                            { name: '流动性', max: 1 },
+                            { name: '合规管控', max: 1 },
+                        ],
+                        shape: 'circle',
+                        splitNumber: 4,
+                        axisName: { color: '#B8BFC9', fontSize: 11, fontWeight: 500 },
+                        splitArea: { areaStyle: { color: ['rgba(59,130,246,0.02)', 'rgba(59,130,246,0.04)'] } },
+                        axisLine: { lineStyle: { color: 'rgba(255,255,255,0.08)' } },
+                        splitLine: { lineStyle: { color: 'rgba(255,255,255,0.04)' } },
+                        center: ['50%', '50%'],
+                        radius: '70%',
+                    },
+                    series: [{
+                        type: 'radar',
+                        data: [{
+                            value: [
+                                store.radarRisk,
+                                store.radarCredit,
+                                store.radarYield,
+                                store.radarLiquidity,
+                                store.radarCompliance
+                            ],
+                            name: '三维评估',
+                            areaStyle: { color: 'rgba(59,130,246,0.25)' },
+                            lineStyle: { color: '#3B82F6', width: 2 },
+                            itemStyle: { color: '#3B82F6' }
+                        }],
+                        symbol: 'circle',
+                        symbolSize: 6,
+                        animationDuration: 800,
+                    }]
+                };
+                chart.setOption(option);
+
+                window.addEventListener('resize', function() {
+                    if (window.radarChartInstance) window.radarChartInstance.resize();
+                });
+            }
+
+            // ============================================================
+            // 14. Tab 2 凯利公式交互引擎 (⭐ 新增)
+            // ============================================================
+            function updateKelly() {
+                var b = parseFloat(document.getElementById('bSlider').value);
+                var p = parseFloat(document.getElementById('pSlider').value);
+                var q = 1 - p;
+
+                // 计算 f*
+                var bp = b * p;
+                var fStar = (bp - q) / b;
+                fStar = Math.max(-1, Math.min(1, fStar)); // 限定范围 -1 ~ 1
+
+                // 更新显示
+                document.getElementById('bDisplay').textContent = b.toFixed(2);
+                document.getElementById('pDisplay').textContent = p.toFixed(2);
+                document.getElementById('qDisplay').textContent = q.toFixed(2);
+
+                document.getElementById('fB').textContent = b.toFixed(2);
+                document.getElementById('fP').textContent = p.toFixed(2);
+                document.getElementById('fQ').textContent = q.toFixed(2);
+                document.getElementById('fBDiv').textContent = b.toFixed(2);
+                document.getElementById('fResult').textContent = fStar.toFixed(3);
+
+                document.getElementById('kpiFStar').textContent = fStar.toFixed(3);
+
+                // 人机配比映射: f* 越高，人工占比越低（自动化程度越高）
+                // 映射: f* = -1 ~ 1 → 人工占比 60% ~ 10%
+                var humanRatio = 35 - fStar * 25;
+                humanRatio = Math.max(10, Math.min(60, humanRatio));
+                var humanRatioDisplay = Math.round(humanRatio);
+                document.getElementById('kpiHumanRatio').textContent = humanRatioDisplay + '%';
+                document.getElementById('humanRatioBar').style.width = humanRatioDisplay + '%';
+                document.getElementById('humanRatioLabel').textContent = humanRatioDisplay + '%';
+
+                // 三方协调度: 与 f* 正相关 (0.2 ~ 0.8)
+                var coordination = 0.40 + fStar * 0.40;
+                coordination = Math.max(0.15, Math.min(0.85, coordination));
+                document.getElementById('kpiCoordination').textContent = coordination.toFixed(2);
+
+                // 供需均衡点: 与 f* 正相关 (0.2 ~ 0.7)
+                var supplyDemand = 0.35 + fStar * 0.35;
+                supplyDemand = Math.max(0.15, Math.min(0.75, supplyDemand));
+                document.getElementById('kpiSupplyDemand').textContent = supplyDemand.toFixed(2);
+
+                // 凯利结论
+                var conclusion = document.getElementById('kellyConclusion');
+                if (fStar > 0.15) {
+                    conclusion.textContent = '💡 当前配置有利可图，建议投入 ' + (fStar * 100).toFixed(1) + '% 仓位，长期增长率最优。';
+                    conclusion.style.borderLeftColor = 'var(--ym-cyan)';
+                } else if (fStar > -0.05) {
+                    conclusion.textContent = '💡 当前配置处于临界状态，建议观望或微调胜率/赔率参数。';
+                    conclusion.style.borderLeftColor = 'var(--ym-gold)';
+                } else {
+                    conclusion.textContent = '💡 当前配置预期亏损，建议降低风险敞口或重新评估策略。';
+                    conclusion.style.borderLeftColor = 'var(--ym-danger)';
+                }
+
+                // ★ 气象溢价：以「当前情景气象」为主，f* 作为风险偏好微调
+                var wm = WEATHER_META[store.scenario.weatherIdx] || WEATHER_META[0];
+                var weatherPremium = (wm.mult - 1) * 100 + (1 - fStar) * 4;
+                weatherPremium = clamp(weatherPremium, 0, 45);
+                document.getElementById('weatherPremium').textContent = '+' + Math.round(weatherPremium) + '%';
+                document.getElementById('weatherMultiplier').textContent = (1 + weatherPremium / 100).toFixed(2) + 'x';
+                document.getElementById('weatherSlot').textContent = wm.name;
+
+                // ★ 时段：由情景需求倍率决定，不再由 f* 反推（避免"胜率高=高峰"的逻辑倒置）
+                var demand = store.scenario.demand;
+                var slot = demand > 1.40 ? '高峰' : (demand < 0.80 ? '低谷' : '平峰');
+                document.getElementById('timeSlot').textContent = slot;
+
+                // ★ 综合定价系数：f* 与拥堵度共同决定
+                var composite = clamp(0.30 + fStar * 0.20 + (store.scenario.congestion - 0.45) * 0.35, 0.15, 0.95);
+                document.getElementById('compositePrice').textContent = composite.toFixed(2);
+
+                // ============ 回写全局情景 → 广播给 Tab1 / Tab3 / Tab6 ============
+                var s = store.scenario;
+                s.fStar = fStar;
+                s.humanRatio = humanRatioDisplay;
+                s.weatherMult = 1 + weatherPremium / 100;
+                s.slot = slot;
+                s.composite = composite;
+                bus.emit('scenario:update', s);
+            }
+
+            // ============================================================
+            // 15. 主题切换
+            // ============================================================
+            var THEME_KEY = 'ym-theme';
+
+            function getPreferredTheme() {
+                var stored = localStorage.getItem(THEME_KEY);
+                if (stored) return stored;
+                var hour = new Date().getHours();
+                return (hour < 6 || hour >= 20) ? 'night' : 'day';
+            }
+
+            function applyTheme(theme) {
+                document.documentElement.setAttribute('data-theme', theme);
+                localStorage.setItem(THEME_KEY, theme);
+                var btn = document.getElementById('themeToggle');
+                var settingsBtn = document.getElementById('themeToggleSettings');
+                var icon = theme === 'night' ? '☀️' : '🌙';
+                if (btn) btn.textContent = icon;
+                if (settingsBtn) settingsBtn.textContent = theme === 'night' ? '☀️ 切换日间模式' : '🌙 切换夜间模式';
+                var meta = document.querySelector('meta[name="theme-color"]');
+                if (meta) meta.setAttribute('content', theme === 'night' ? '#14100C' : '#0A0E17');
+                // 图表跟着主题走（ECharts 的 dark 主题在暖色系下会打架）
+                if (window.__ymReady) {
+                    clearTimeout(window.__ymThemeTimer);
+                    window.__ymThemeTimer = setTimeout(rebuildCharts, 60);
+                }
+            }
+
+            function toggleTheme() {
+                var current = document.documentElement.getAttribute('data-theme') || 'day';
+                applyTheme(current === 'night' ? 'day' : 'night');
+            }
+
+            // ============================================================
+            // 16. Tab 切换
+            // ============================================================
+            var tabBtns = document.querySelectorAll('.ym-nav .tab-btn');
+            var tabContents = document.querySelectorAll('.ym-tab-content');
+
+            function switchTab(tabId, skipHash) {
+                tabContents.forEach(function(c) { c.classList.remove('active'); });
+                var target = document.getElementById(tabId);
+                if (target) target.classList.add('active');
+                tabBtns.forEach(function(b) {
+                    b.classList.remove('active');
+                    var on = b.dataset.tab === tabId;
+                    if (on) b.classList.add('active');
+                    b.setAttribute('aria-selected', on ? 'true' : 'false');
+                });
+                if (!skipHash && history.replaceState) {
+                    history.replaceState(null, '', '#' + tabId);
+                }
+                setTimeout(function() {
+                    if (tabId === 'tab1' && window.radarChartInstance) window.radarChartInstance.resize();
+                    if (tabId === 'tab5' && emergencyChartInstance) emergencyChartInstance.resize();
+                    if (tabId === 'tab4') {
+                        if (!window.pidChartInstance) initPidChart();
+                        else window.pidChartInstance.resize();
+                        runPidSim();
+                    }
+                    if (tabId === 'tab3') recalcLogistics();
+                }, 150);
+            }
+
+            // 从 URL hash 恢复所在面板（支持 #tab2 这类深链分享）
+            function restoreTabFromHash() {
+                var h = (location.hash || '').replace('#', '');
+                if (/^tab[1-6]$/.test(h)) switchTab(h, true);
+            }
+
+            // ============================================================
+            // 16.5 Tab3 渲染：工单池 + 实算匹配 + 机队状态
+            // ============================================================
+            function esc(str) {
+                return String(str).replace(/[&<>"']/g, function(c) {
+                    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+                });
+            }
+
+            var PRIO_COLOR = { '紧急': 'var(--ym-danger)', '高优先级': 'var(--ym-gold)', '标准': 'var(--ym-blue)', '普通': 'var(--ym-cyan)' };
+            var selectedOrderId = null;
+
+            function renderOrders() {
+                var host = document.getElementById('orderList');
+                if (!host) return;
+                if (orders.length === 0) {
+                    host.innerHTML = '<div style="text-align:center;padding:20px;color:var(--ym-text-dim);font-size:12px;">工单池为空，请在下方新增</div>';
+                } else {
+                    host.innerHTML = orders.map(function(o) {
+                        var done = assignments[o.id];
+                        var sel = o.id === selectedOrderId;
+                        var assigned = done ? FLEET.filter(function(f) { return f.id === done; })[0] : null;
+                        return '<div class="order-row' + (sel ? ' sel' : '') + '" data-order="' + o.id + '" role="button" tabindex="0" ' +
+                            'aria-label="工单 ' + o.id + ' ' + esc(o.name) + '">' +
+                            '<div style="flex:1;min-width:0;">' +
+                            '<div style="display:flex;align-items:center;gap:6px;">' +
+                            '<strong style="color:var(--ym-text-primary);">#' + o.id + '</strong>' +
+                            '<span style="color:var(--ym-text-secondary);">' + esc(o.name) + '</span>' +
+                            '<span style="margin-left:auto;font-size:11px;color:' + (PRIO_COLOR[o.priority] || 'var(--ym-text-muted)') + ';">' + esc(o.priority) + '</span>' +
+                            '</div>' +
+                            '<div style="font-size:11px;color:var(--ym-text-muted);margin-top:2px;">' +
+                            o.weight + 'kg · ' + o.distance + 'km · ' + o.deadline + 'min' +
+                            (assigned ? ' · <span style="color:var(--ym-success);">已派 ' + esc(assigned.name) + '</span>' : '') +
+                            '</div></div>' +
+                            '<button class="btn btn-sm btn-danger" data-ordel="' + o.id + '" aria-label="删除工单 ' + o.id + '">✕</button>' +
+                            '</div>';
+                    }).join('');
+                }
+                var pending = orders.filter(function(o) { return !assignments[o.id]; }).length;
+                var badge = document.getElementById('orderCountBadge');
+                if (badge) badge.textContent = '待分配 ' + pending;
+                var sum = document.getElementById('orderSummary');
+                if (sum) {
+                    var risky = orders.filter(function(o) { return matchFleet(o).every(function(m) { return !m.feasible; }); }).length;
+                    sum.textContent = '📊 共 ' + orders.length + ' 单 · 待分配 ' + pending + ' 单' +
+                        (risky > 0 ? ' · ⚠️ 无可用运力 ' + risky + ' 单' : '') +
+                        ' · 情景：' + SCENARIOS[store.scenario.key].label.replace(/\s|🟢|🌧️|🔥|🚫/g, '');
+                }
+
+                host.querySelectorAll('[data-order]').forEach(function(row) {
+                    var pick = function() {
+                        selectedOrderId = Number(row.dataset.order);
+                        renderOrders(); renderMatches();
+                    };
+                    row.addEventListener('click', pick);
+                    row.addEventListener('keydown', function(e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } });
+                });
+                host.querySelectorAll('[data-ordel]').forEach(function(btn) {
+                    btn.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        var id = Number(this.dataset.ordel);
+                        orders = orders.filter(function(o) { return o.id !== id; });
+                        delete assignments[id];
+                        if (selectedOrderId === id) selectedOrderId = orders.length ? orders[0].id : null;
+                        persistOrders(); recalcLogistics();
+                    });
+                });
+            }
+
+            function renderMatches() {
+                var host = document.getElementById('matchList');
+                var empty = document.getElementById('matchEmpty');
+                if (!host) return;
+                var order = orders.filter(function(o) { return o.id === selectedOrderId; })[0];
+                if (!order) {
+                    host.innerHTML = '';
+                    if (empty) empty.style.display = 'block';
+                    return;
+                }
+                if (empty) empty.style.display = 'none';
+                var ranked = matchFleet(order);
+                var basis = document.getElementById('matchBasis');
+                if (basis) basis.textContent = '#' + order.id + ' · 侧风 ' + store.scenario.windBase + 'm/s';
+
+                host.innerHTML = ranked.slice(0, 3).map(function(m, idx) {
+                    var isTop = idx === 0 && m.feasible;
+                    var border = m.feasible ? (isTop ? '1px solid var(--ym-gold)' : '1px solid var(--ym-border)') : '1px dashed var(--ym-text-dim)';
+                    var detail = Object.keys(m.detail).map(function(k) {
+                        return '<span style="font-size:10px;color:var(--ym-text-dim);">' + k + ' ' + m.detail[k] + '</span>';
+                    }).join(' · ');
+                    return '<div style="background:var(--ym-bg-elevated);border-radius:6px;padding:10px 14px;border:' + border + ';' + (m.feasible ? '' : 'opacity:.62;') + '">' +
+                        '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+                        '<span><strong style="color:var(--ym-text-primary);">' + esc(m.ac.name) + '</strong>' +
+                        (assignments[order.id] === m.ac.id ? ' <span class="badge badge-blue">已派</span>' : '') + '</span>' +
+                        '<span style="font-weight:600;color:' + (m.feasible ? (isTop ? 'var(--ym-gold-light)' : 'var(--ym-text-muted)') : 'var(--ym-danger)') + ';">' +
+                        (m.feasible ? '匹配度 ' + m.score + '%' : '不可行') + '</span></div>' +
+                        '<div style="font-size:12px;color:var(--ym-text-muted);margin-top:2px;">' +
+                        (m.feasible
+                            ? '载重余量 ' + m.margin + 'kg · ETA ' + m.eta.toFixed(0) + 'min · 报价 ¥' + m.cost.toFixed(0) + ' · SOH ' + m.ac.soh + '% 🟢'
+                            : '⛔ ' + esc(m.reasons[0] || '不满足约束')) +
+                        '</div>' +
+                        (m.feasible ? '<div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap;">' + detail + '</div>' : '') +
+                        (m.feasible ? '<div style="margin-top:6px;"><button class="btn btn-sm" data-assign="' + m.ac.id + '">指派此机型</button></div>' : '') +
+                        '</div>';
+                }).join('');
+
+                host.querySelectorAll('[data-assign]').forEach(function(btn) {
+                    btn.addEventListener('click', function() {
+                        assignments[order.id] = this.dataset.assign;
+                        persistOrders(); renderOrders(); renderMatches();
+                        var ac = FLEET.filter(function(f) { return f.id === this.dataset.assign; }.bind(this))[0];
+                        toast('✅ #' + order.id + ' 已指派 ' + (ac ? ac.name : ''), 'success');
+                    });
+                });
+            }
+
+            function renderFleetStatus() {
+                var host = document.getElementById('fleetStatus');
+                if (!host) return;
+                var sc = store.scenario;
+                host.innerHTML = FLEET.map(function(ac) {
+                    var ok = ac.soh >= 60 && sc.windBase <= ac.windMax;
+                    var dot = ok ? '🟢' : (ac.soh >= 60 ? '🟡' : '🔴');
+                    var why = [];
+                    if (ac.soh < 60) why.push('SOH 低');
+                    if (sc.windBase > ac.windMax) why.push('抗风不足');
+                    return '<div style="display:flex;justify-content:space-between;font-size:11px;padding:4px 8px;background:var(--ym-bg-inset);border-radius:4px;">' +
+                        '<span style="color:var(--ym-text-secondary);">' + dot + ' ' + esc(ac.name) + '</span>' +
+                        '<span style="color:var(--ym-text-muted);">×' + ac.unit + ' · ' + ac.payload + 'kg/' + ac.range + 'km · SOH ' + ac.soh + '%' +
+                        (why.length ? ' · ' + why.join('/') : '') + '</span></div>';
+                }).join('');
+            }
+
+            function recalcLogistics() {
+                if (selectedOrderId === null && orders.length) selectedOrderId = orders[0].id;
+                renderOrders(); renderMatches(); renderFleetStatus(); renderGlobalAssign();
+            }
+
+            // 全局最优指派渲染（与贪心同屏对比）
+            function renderGlobalAssign() {
+                var host = document.getElementById('gaList');
+                if (!host) return;
+                var r = globalAssign();
+                window.__gaResult = r;
+
+                document.getElementById('gaOpt').textContent = r.optimal.total.toFixed(1);
+                document.getElementById('gaGreedy').textContent = r.greedy.total.toFixed(1);
+                var gainEl = document.getElementById('gaGain');
+                gainEl.textContent = (r.improvement > 0 ? '+' : '') + r.improvement + '%';
+                gainEl.className = 'value ' + (r.improvement > 0 ? 'success' : '');
+                document.getElementById('gaSlots').textContent = r.usableSlots + ' / ' + r.slotCount;
+
+                var note = document.getElementById('gaNote');
+                if (r.improvement > 0) {
+                    note.textContent = '⚠️ 贪心方案正在损失 ' + r.improvement + '% 的总匹配收益';
+                    note.style.color = 'var(--ym-gold-light)';
+                } else {
+                    note.textContent = '✅ 当前工单无冲突，贪心已是最优解 · 新增高价值工单可制造运力竞争';
+                    note.style.color = 'var(--ym-text-muted)';
+                }
+
+                if (!orders.length) {
+                    host.innerHTML = '<div style="text-align:center;padding:16px;color:var(--ym-text-dim);font-size:12px;">工单池为空</div>';
+                    return;
+                }
+
+                host.innerHTML = r.optimal.pairs.map(function(p) {
+                    var o = p.order;
+                    if (!p.slot) {
+                        return '<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:var(--ym-bg-inset);border-radius:4px;border-left:3px solid var(--ym-text-dim);font-size:12px;">' +
+                            '<span style="color:var(--ym-text-secondary);">#' + o.id + ' ' + esc(o.name) + '</span>' +
+                            '<span style="color:var(--ym-danger);">⛔ 无可用运力（低于 35 分阈值或受情景限制）</span></div>';
+                    }
+                    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:var(--ym-bg-elevated);border-radius:4px;border-left:3px solid var(--ym-gold);font-size:12px;">' +
+                        '<span style="color:var(--ym-text-secondary);">#' + o.id + ' ' + esc(o.name) +
+                        ' <span style="color:var(--ym-text-dim);">· ' + o.weight + 'kg / ' + o.distance + 'km</span></span>' +
+                        '<span><strong style="color:var(--ym-text-primary);">' + esc(p.slot.name) + '</strong>' +
+                        ' <span style="color:var(--ym-text-dim);">' + p.slot.slotId + '</span>' +
+                        ' <span style="color:var(--ym-gold-light);font-weight:600;">' + p.score + '</span></span></div>';
+                }).join('');
+            }
+
+            // ============================================================
+            // 编排层：指派 → 风控 Agent → Guardrail → 落地
+            //
+            // 这是"Agent 说的不算"的关键实现：
+            //   Agent(evaluateRisk) 给出判断，Guardrail 独立复算物理约束，
+            //   最终落地的永远是 Guardrail 净化后的 safePlan。
+            // ============================================================
+
+            function buildRiskContext(planResult) {
+                var s = store.scenario;
+                var fEl = document.getElementById('mcF');
+                var bEl = document.getElementById('bSlider');
+                var pEl = document.getElementById('pSlider');
+                var f = fEl ? parseFloat(fEl.value) : 0;
+                var b = bEl ? parseFloat(bEl.value) : 1;
+                var p = pEl ? parseFloat(pEl.value) : 0.5;
+                var perEl = document.getElementById('mcPeriods');
+                var periods = perEl ? (parseInt(perEl.value, 10) || 120) : 120;
+                var mc = AirMind.kellyMonteCarlo({ b: b, p: p, f: f, periods: periods, trials: 200, seed: 20240918 });
+
+                return {
+                    scenario: s,
+                    kelly: { f: f, fStar: AirMind.kellyFraction(b, p), ruinProb: mc.ruinProb, geoGrowth: mc.geoGrowth, periods: periods },
+                    plan: planResult ? planResult.optimal : { pairs: [], assignedCount: 0, unassignedCount: 0 }
+                };
+            }
+
+            /** 渲染风控结论 */
+            function renderRisk(ctx) {
+                var a = AirMind.evaluateRisk(ctx);
+                window.__lastAssessment = a;
+
+                var badge = document.getElementById('riskBadge');
+                if (badge) {
+                    badge.textContent = a.level === 'BLOCK' ? '🚫 已阻断' : (a.level === 'WARN' ? '⚠️ 有警告' : '✅ 通过');
+                    badge.className = 'badge ' + (a.level === 'BLOCK' ? 'badge-danger' : (a.level === 'WARN' ? 'badge-gold' : 'badge-blue'));
+                }
+
+                var v = document.getElementById('riskVerdict');
+                if (v) {
+                    v.textContent = AirMind.explainRisk(a);
+                    v.style.borderLeftColor = a.level === 'BLOCK' ? 'var(--ym-danger)' :
+                        (a.level === 'WARN' ? 'var(--ym-gold)' : 'var(--ym-success)');
+                }
+
+                var bHost = document.getElementById('riskBlocks');
+                if (bHost) {
+                    bHost.innerHTML = a.blocks.length
+                        ? a.blocks.map(function(b) {
+                            return '<div style="padding:8px 10px;background:rgba(239,83,80,.08);border-left:3px solid var(--ym-danger);border-radius:4px;">' +
+                                '<div style="font-size:12px;color:var(--ym-text-primary);font-weight:600;">🚫 ' + esc(b.name) + '</div>' +
+                                '<div style="font-size:11px;color:var(--ym-text-muted);margin-top:2px;">' + esc(b.why) + '</div>' +
+                                '<div style="font-size:11px;color:var(--ym-danger);margin-top:3px;">' + esc((b.detail || []).join('；')) + '</div>' +
+                                '<div style="font-size:11px;color:var(--ym-cyan);margin-top:3px;">→ ' + esc(b.fix) + '</div></div>';
+                        }).join('')
+                        : '<div style="font-size:12px;color:var(--ym-text-dim);padding:8px;">无阻断项</div>';
+                }
+
+                var wHost = document.getElementById('riskWarns');
+                if (wHost) {
+                    wHost.innerHTML = a.warns.length
+                        ? a.warns.map(function(w) {
+                            return '<div style="padding:8px 10px;background:rgba(212,160,64,.07);border-left:3px solid var(--ym-gold);border-radius:4px;">' +
+                                '<div style="font-size:12px;color:var(--ym-text-primary);font-weight:600;">⚠️ ' + esc(w.name) + '</div>' +
+                                '<div style="font-size:11px;color:var(--ym-text-muted);margin-top:2px;">' + esc((w.detail || []).join('；')) + '</div>' +
+                                '<div style="font-size:11px;color:var(--ym-cyan);margin-top:3px;">→ ' + esc(w.fix) + '</div></div>';
+                        }).join('')
+                        : '<div style="font-size:12px;color:var(--ym-text-dim);padding:8px;">无警告项</div>';
+                }
+                return a;
+            }
+
+            /** 渲染 Guardrail 结果 */
+            function renderGuard(planResult, ctx) {
+                var g = AirMind.guardrail(planResult ? planResult.optimal : { pairs: [] }, ctx);
+                window.__lastGuard = g;
+                var host = document.getElementById('guardResult');
+                if (!host) return g;
+                if (g.passed) {
+                    host.innerHTML = '<span style="color:var(--ym-success);">✅ 全部指派通过物理约束复算，未触发强制剔除。</span>';
+                } else {
+                    host.innerHTML = '<div style="color:var(--ym-danger);margin-bottom:4px;">🚫 强制剔除 ' +
+                        g.violations.length + ' 项违规指派：</div>' +
+                        g.violations.map(function(v) {
+                            return '<div style="padding:4px 8px;background:var(--ym-bg-inset);border-radius:3px;margin-top:3px;font-size:11px;">' +
+                                '工单 #' + v.orderId + ' ← ' + esc(v.slotId) + ' ：' + esc(v.reasons.join('，')) + '</div>';
+                        }).join('') +
+                        '<div style="margin-top:6px;color:var(--ym-cyan);">→ 落地方案已自动降级为安全版本（' +
+                        g.safePlan.assignedCount + ' 单可执行）</div>';
+                }
+                return g;
+            }
+
+            /** 决策轨迹：持久化，支撑回放与追责 */
+            var TRACE_KEY = 'decision_trace';
+            var TRACE_MAX = 50;
+
+            function getTrace() {
+                var t = safeStore.get(TRACE_KEY, []);
+                return Array.isArray(t) ? t : [];
+            }
+            function pushTrace(entry) {
+                var t = getTrace();
+                t.unshift(entry);
+                if (t.length > TRACE_MAX) t = t.slice(0, TRACE_MAX);
+                safeStore.set(TRACE_KEY, t);
+                renderTrace();
+            }
+            function renderTrace() {
+                var t = getTrace();
+                var host = document.getElementById('traceList');
+                var cnt = document.getElementById('traceCount');
+                if (cnt) cnt.textContent = t.length + ' 条';
+                if (!host) return;
+                if (!t.length) {
+                    host.innerHTML = '<div style="text-align:center;padding:16px;color:var(--ym-text-dim);font-size:12px;">暂无决策记录，点击上方「编排执行」开始</div>';
+                    return;
+                }
+                host.innerHTML = t.map(function(e) {
+                    var color = e.final === 'BLOCKED' ? 'var(--ym-danger)' : (e.final === 'WARNED' ? 'var(--ym-gold)' : 'var(--ym-success)');
+                    return '<div style="padding:8px 10px;background:var(--ym-bg-elevated);border-radius:4px;border-left:3px solid ' + color + ';">' +
+                        '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--ym-text-dim);">' +
+                        '<span>' + esc(e.time) + '</span><span>' + esc(e.scenarioLabel) + '</span></div>' +
+                        '<div style="font-size:12px;color:var(--ym-text-secondary);margin-top:3px;">' + esc(e.summary) + '</div>' +
+                        '<div style="font-size:11px;color:var(--ym-text-muted);margin-top:2px;">' +
+                        '指派 ' + e.assigned + ' 单' +
+                        (e.guardBlocked ? ' · <span style="color:var(--ym-danger);">Guardrail 剔除 ' + e.guardBlocked + ' 项</span>' : '') +
+                        ' · 风控 ' + e.riskLevel + '</div></div>';
+                }).join('');
+            }
+
+            /**
+             * 编排执行：这是唯一允许"落地"的入口
+             */
+            function orchestrate(opts) {
+                opts = opts || {};
+                var planResult = globalAssign();
+                var ctx = buildRiskContext(planResult);
+                var a = renderRisk(ctx);
+                var g = renderGuard(planResult, ctx);
+
+                var summaryEl = document.getElementById('riskSummary');
+                var finalState, msg;
+
+                if (!a.passed) {
+                    finalState = 'BLOCKED';
+                    msg = '🚫 风控阻断：' + a.blocks.map(function(b) { return b.name; }).join('、') + '——方案未落地';
+                    if (summaryEl) { summaryEl.textContent = msg; summaryEl.style.color = 'var(--ym-danger)'; }
+                    pushTrace({
+                        time: new Date().toLocaleString('zh-CN', { hour12: false }),
+                        scenarioLabel: SCENARIOS[store.scenario.key].label,
+                        summary: msg, assigned: 0, riskLevel: a.level,
+                        guardBlocked: g.violations.length, final: finalState
+                    });
+                    toast('🚫 风控阻断，方案未落地：' + a.blocks[0].name, 'danger');
+                    return { ok: false, assessment: a, guard: g };
+                }
+
+                // 风控通过 → 落地 Guardrail 净化后的安全方案
+                var n = 0;
+                g.safePlan.pairs.forEach(function(p) {
+                    if (p.slot) { assignments[p.order.id] = p.slot.fleetId; n++; }
+                    else delete assignments[p.order.id];
+                });
+                persistOrders(); renderOrders(); renderMatches(); renderGlobalAssign();
+
+                finalState = g.violations.length ? 'WARNED' : 'OK';
+                msg = (g.violations.length
+                    ? '⚠️ Guardrail 剔除 ' + g.violations.length + ' 项后落地 ' + n + ' 单'
+                    : '✅ 已落地 ' + n + ' 单');
+                if (a.warns.length) msg += '（另有 ' + a.warns.length + ' 项警告）';
+                if (summaryEl) {
+                    summaryEl.textContent = msg;
+                    summaryEl.style.color = g.violations.length ? 'var(--ym-gold)' : 'var(--ym-success)';
+                }
+                pushTrace({
+                    time: new Date().toLocaleString('zh-CN', { hour12: false }),
+                    scenarioLabel: SCENARIOS[store.scenario.key].label,
+                    summary: msg, assigned: n, riskLevel: a.level,
+                    guardBlocked: g.violations.length, final: finalState
+                });
+                toast(msg, g.violations.length ? 'warn' : 'success');
+                return { ok: true, assessment: a, guard: g };
+            }
+
+            /** 仅审查不落地 */
+            function reviewOnly() {
+                var planResult = globalAssign();
+                var ctx = buildRiskContext(planResult);
+                var a = renderRisk(ctx);
+                var g = renderGuard(planResult, ctx);
+                var summaryEl = document.getElementById('riskSummary');
+                if (summaryEl) {
+                    summaryEl.textContent = a.passed ? '✅ 审查通过，可执行' : '🚫 存在阻断项，不可执行';
+                    summaryEl.style.color = a.passed ? 'var(--ym-success)' : 'var(--ym-danger)';
+                }
+                toast(a.passed ? '✅ 风控审查通过' : '🚫 风控审查发现 ' + a.blocks.length + ' 项阻断', a.passed ? 'success' : 'danger');
+            }
+
+            function clearTrace() {
+                if (!getTrace().length) { toast('暂无决策记录', 'info'); return; }
+                if (confirm('确定清空全部决策轨迹吗？')) {
+                    safeStore.remove(TRACE_KEY);
+                    renderTrace();
+                    toast('🗑️ 决策轨迹已清空', 'info');
+                }
+            }
+
+            function exportTrace() {
+                var t = getTrace();
+                if (!t.length) { toast('暂无决策记录可导出', 'warn'); return; }
+                var blob = new Blob([JSON.stringify(t, null, 2)], { type: 'application/json' });
+                var url = URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                a.href = url;
+                a.download = 'airmind_decision_trace_' + new Date().toISOString().slice(0, 10) + '.json';
+                document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                toast('📤 已导出 ' + t.length + ' 条决策记录', 'success');
+            }
+
+            // ============================================================
+            // Tab2 蒙特卡洛：多期风险推演
+            // ============================================================
+            function initMcChart() {
+                var dom = document.getElementById('mcChart');
+                if (!dom) return;
+                if (window.mcChartInstance) window.mcChartInstance.dispose();
+                if (typeof echarts === 'undefined') {
+                    dom.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--ym-text-muted);font-size:13px;">📉 ECharts 不可用，指标仍可计算</div>';
+                    window.mcChartInstance = null;
+                    return;
+                }
+                window.mcChartInstance = echarts.init(dom, currentChartTheme());
+                window.addEventListener('resize', function() {
+                    if (window.mcChartInstance) window.mcChartInstance.resize();
+                });
+            }
+
+            function renderMonteCarlo() {
+                var fEl = document.getElementById('mcF');
+                var pEl = document.getElementById('mcPeriods');
+                var bEl = document.getElementById('bSlider');
+                var pSld = document.getElementById('pSlider');
+                if (!fEl || !bEl || !pSld) return;
+
+                var b = parseFloat(bEl.value);
+                var p = parseFloat(pSld.value);
+                var f = parseFloat(fEl.value);
+                var periods = parseInt(pEl.value, 10) || 200;
+
+                var r = AirMind.kellyMonteCarlo({ b: b, p: p, f: f, periods: periods, trials: 400, seed: 20240918 });
+                var fStar = AirMind.kellyFraction(b, p);
+
+                document.getElementById('mcFV').textContent = f.toFixed(2);
+                var hint = document.getElementById('mcFStarHint');
+                if (hint) hint.textContent = '凯利建议 ' + fStar.toFixed(2);
+
+                var fmt = function(x) {
+                    if (x < 0.01) return '<0.01';
+                    if (x >= 1e6) return x.toExponential(2);   // 复利 200 期后是天文数字
+                    return x.toFixed(2);
+                };
+
+                var ruinEl = document.getElementById('mcRuin');
+                ruinEl.textContent = (r.ruinProb * 100).toFixed(1) + '%';
+                ruinEl.className = 'value ' + (r.ruinProb > 0.30 ? 'danger' : (r.ruinProb > 0.05 ? 'gold' : 'success'));
+
+                document.getElementById('mcP50').textContent = fmt(r.p50);
+                document.getElementById('mcP50').className = 'value ' + (r.p50 >= 1 ? 'success' : 'danger');
+                document.getElementById('mcBand').textContent = fmt(r.p10) + ' ~ ' + fmt(r.p90);
+                var geoEl = document.getElementById('mcGeo');
+                geoEl.textContent = (r.geoGrowth * 100).toFixed(2) + '%';
+                geoEl.className = 'value ' + (r.geoGrowth > 0 ? 'success' : 'danger');
+
+                var v = document.getElementById('mcVerdict');
+                if (v) {
+                    var msg, color;
+                    if (fStar <= 0) {
+                        msg = '🚫 当前赔率结构下凯利建议值为 ' + fStar.toFixed(2) + '（≤0）——此情景不值得投入，最佳动作是空仓观望，而非硬找仓位。';
+                        color = 'var(--ym-danger)';
+                    } else if (f > 1) {
+                        msg = '⚠️ 仓位 >1 意味着加杠杆，已超出本模型适用范围（假设亏损不超过本金）。实际杠杆会放大尾部风险，此处仅供参考。';
+                        color = 'var(--ym-danger)';
+                    } else if (f > fStar * 1.8) {
+                        msg = '⚠️ 当前仓位是凯利建议值的 ' + (f / Math.max(fStar, 0.01)).toFixed(1) + ' 倍——过度下注不会提高长期收益，只会把破产概率推到 ' + (r.ruinProb * 100).toFixed(0) + '%。';
+                        color = 'var(--ym-danger)';
+                    } else if (r.ruinProb > 0.30) {
+                        msg = '🔴 破产概率偏高，建议下调仓位至 ' + (fStar > 0 ? fStar.toFixed(2) : '0') + ' 附近。';
+                        color = 'var(--ym-danger)';
+                    } else if (r.geoGrowth <= 0) {
+                        msg = '📉 长期期望为负增长，此仓位不可持续。';
+                        color = 'var(--ym-gold)';
+                    } else {
+                        msg = '✅ 仓位处于合理区间：每期几何增长 ' + (r.geoGrowth * 100).toFixed(2) + '%，破产概率 ' + (r.ruinProb * 100).toFixed(1) + '%。';
+                        color = 'var(--ym-success)';
+                    }
+                    v.textContent = msg;
+                    v.style.borderLeftColor = color;
+                }
+
+                if (!window.mcChartInstance) return;
+                var C = chartBase();
+                var xs = r.band.map(function(pt) { return pt.t; });
+                // 取对数资金：复利下终值跨十几个数量级，线性轴会把早期特征压成一条线
+                var LG = function(x) { return +Math.log(Math.max(x, 1e-6)).toFixed(3); };
+                var lo = r.band.map(function(pt) { return LG(pt.p10); });
+                var span = r.band.map(function(pt) { return +(LG(pt.p90) - LG(pt.p10)).toFixed(3); });
+                var mid = r.band.map(function(pt) { return LG(pt.p50); });
+
+                window.mcChartInstance.setOption({
+                    tooltip: {
+                        trigger: 'axis',
+                        formatter: function(ps) {
+                            var i = ps[0].dataIndex;
+                            var f2 = function(x) { return x < 0.01 ? '<0.01' : (x >= 1e6 ? x.toExponential(2) : x.toFixed(2)); };
+                            return '第 ' + xs[i] + ' 期<br/>P90 ' + f2(r.band[i].p90) +
+                                '<br/>中位 ' + f2(r.band[i].p50) + '<br/>P10 ' + f2(r.band[i].p10);
+                        }
+                    },
+                    legend: { data: ['P10~P90 区间', '中位轨迹'], textStyle: { color: C.text, fontSize: 11 }, top: 0, right: 0 },
+                    grid: { left: 52, right: 16, top: 30, bottom: 26 },
+                    xAxis: { type: 'category', data: xs, name: '期', nameTextStyle: { color: C.text, fontSize: 10 },
+                        axisLabel: { color: C.text, fontSize: 10 }, axisLine: { lineStyle: { color: C.line } } },
+                    yAxis: { type: 'value', name: 'ln(资金)', nameTextStyle: { color: C.text, fontSize: 10 },
+                        axisLabel: { color: C.text, fontSize: 10 }, splitLine: { lineStyle: { color: C.split } } },
+                    series: [
+                        { name: 'P10~P90 区间', type: 'line', stack: 'band', data: lo, showSymbol: false,
+                            lineStyle: { opacity: 0 }, areaStyle: { opacity: 0 }, silent: true },
+                        { name: 'P10~P90 区间', type: 'line', stack: 'band', data: span, showSymbol: false,
+                            lineStyle: { opacity: 0 }, areaStyle: { color: 'rgba(59,130,246,0.18)' }, silent: true },
+                        { name: '中位轨迹', type: 'line', data: mid, showSymbol: false, smooth: true,
+                            lineStyle: { width: 2, color: '#D4A040' } }
+                    ]
+                }, true);
+            }
+
+            function applyGlobalAssign() {
+                // 改走编排器：必须过风控与 Guardrail 才允许落地
+                orchestrate();
+            }
+
+            function clearAssignments() {
+                assignments = {};
+                persistOrders(); renderOrders(); renderMatches(); renderGlobalAssign();
+                toast('↺ 已清空所有指派', 'info');
+            }
+
+            // ============================================================
+            // 16.6 Tab4 串级 PID 仿真：图表 + 指标
+            // ============================================================
+            function initPidChart() {
+                var dom = document.getElementById('pidChart');
+                if (!dom) return;
+                if (window.pidChartInstance) window.pidChartInstance.dispose();
+                if (typeof echarts === 'undefined') {
+                    dom.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--ym-text-muted);font-size:13px;">📉 ECharts 不可用，已降级为数值模式（指标仍可计算）</div>';
+                    window.pidChartInstance = null;
+                    return;
+                }
+                window.pidChartInstance = echarts.init(dom, currentChartTheme());
+                window.addEventListener('resize', function() {
+                    if (window.pidChartInstance) window.pidChartInstance.resize();
+                });
+            }
+
+            function runPidSim() {
+                var craft = (document.getElementById('pidCraft') || {}).value || '多点锁平开窗';
+                var cfg = {
+                    craft: craft,
+                    kp: parseFloat((document.getElementById('pidKp') || {}).value || 0.120),
+                    ki: parseFloat((document.getElementById('pidKi') || {}).value || 0.080),
+                    kd: parseFloat((document.getElementById('pidKd') || {}).value || 0.050),
+                    wind: parseFloat((document.getElementById('pidWind') || {}).value || 15)
+                };
+                var r = simulateCascade(cfg);
+                var C = chartBase();
+
+                document.getElementById('pidKpV').textContent = cfg.kp.toFixed(3);
+                document.getElementById('pidKiV').textContent = cfg.ki.toFixed(3);
+                document.getElementById('pidKdV').textContent = cfg.kd.toFixed(3);
+                document.getElementById('pidWindV').textContent = cfg.wind + ' m/s';
+                document.getElementById('pidPeak').textContent = r.peak.toFixed(3) + ' m';
+                document.getElementById('pidSettle').textContent = (r.settle > 0 ? r.settle.toFixed(2) + ' s' : '< 0.01 s');
+                document.getElementById('pidSteady').textContent = r.steady.toFixed(3) + ' m';
+                document.getElementById('pidHuman').textContent = Math.round(r.humanW * 100) + '%';
+
+                var desc = document.getElementById('pidCraftDesc');
+                if (desc) desc.innerHTML = '🧬 <strong>' + craft + '</strong> · ζ=' + r.zeta + ' ωn=' + r.wn + ' · ' + r.tag +
+                    '<br/><span style="color:var(--ym-text-dim);">阻尼比越低越"飘"，需要更高人工接管权重兜底。</span>';
+
+                var v = document.getElementById('pidVerdict');
+                if (v) {
+                    var grade, color;
+                    if (r.steady < 0.02 && r.settle < 3.2) { grade = 'A · 稳态几乎无偏，扰动 3s 内收敛，可放心投入商业飞行。'; color = 'var(--ym-success)'; }
+                    else if (r.steady < 0.08 && r.settle < 5.0) { grade = 'B · 可接受，乘客能感知轻微偏移，建议增大 I 消除稳态差。'; color = 'var(--ym-gold)'; }
+                    else if (r.steady < 0.30) { grade = 'C · 偏差偏大，建议提高 P 或切换至多点锁平开窗机型。'; color = 'var(--ym-danger)'; }
+                    else { grade = 'D · 已失控，积分饱和或增益过低，请立即复位参数。'; color = 'var(--ym-danger)'; }
+                    v.style.borderLeftColor = color;
+                    v.textContent = '📋 评估：' + grade;
+                }
+
+                if (!window.pidChartInstance) return;
+                window.pidChartInstance.setOption({
+                    tooltip: { trigger: 'axis' },
+                    legend: { data: ['航迹偏差', '侧风'], textStyle: { color: C.text, fontSize: 11 }, top: 0, right: 0 },
+                    grid: { left: 48, right: 46, top: 30, bottom: 26 },
+                    xAxis: { type: 'value', name: 's', nameTextStyle: { color: C.text, fontSize: 10 }, min: 0, max: 8,
+                        axisLabel: { color: C.text, fontSize: 10 }, axisLine: { lineStyle: { color: C.line } },
+                        splitLine: { lineStyle: { color: C.split } } },
+                    yAxis: [{ type: 'value', name: '偏差 m', nameTextStyle: { color: C.text, fontSize: 10 },
+                        axisLabel: { color: C.text, fontSize: 10 }, splitLine: { lineStyle: { color: C.split } } },
+                        { type: 'value', name: 'm/s', nameTextStyle: { color: C.text, fontSize: 10 },
+                        axisLabel: { color: C.text, fontSize: 10 }, splitLine: { show: false } }],
+                    series: [
+                        { name: '航迹偏差', type: 'line', showSymbol: false, smooth: true, data: r.series,
+                            lineStyle: { width: 2, color: r.color }, areaStyle: { color: r.color, opacity: 0.10 },
+                            markLine: { silent: true, symbol: 'none', data: [{ xAxis: 1.5, label: { formatter: '侧风注入', color: C.text, fontSize: 10 }, lineStyle: { color: '#EF5350', type: 'dashed' } }] } },
+                        { name: '侧风', type: 'line', yAxisIndex: 1, showSymbol: false, step: 'end', data: r.windSeries,
+                            lineStyle: { width: 1.4, color: '#8B5CF6', type: 'dotted' } }
+                    ]
+                }, true);
+            }
+
+            // ============================================================
+            // 17. 子Tab切换 (物流)
+            // ============================================================
+            var subBtns = document.querySelectorAll('[data-subtab]');
+            subBtns.forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var targetId = this.dataset.subtab;
+                    document.querySelectorAll('.ym-sub-content').forEach(function(c) { c.style.display = 'none'; });
+                    var target = document.getElementById(targetId);
+                    if (target) target.style.display = 'block';
+                    subBtns.forEach(function(b) {
+                        b.style.background = 'var(--ym-bg-elevated)';
+                        b.style.color = 'var(--ym-text-muted)';
+                        b.style.border = '1px solid var(--ym-border)';
+                    });
+                    this.style.background = 'var(--ym-blue)';
+                    this.style.color = '#fff';
+                    this.style.border = 'none';
+                });
+            });
+            var defaultSub = document.querySelector('[data-subtab="logistics-sub1"]');
+            if (defaultSub) defaultSub.click();
+
+            // ============================================================
+            // 18. 紧急停机
+            // ============================================================
+            document.getElementById('emergencyBtn').addEventListener('click', function() {
+                if (confirm('⚠️ 确认执行紧急停机？所有在途飞行将立即中止！')) {
+                    var tag = document.getElementById('statusTag');
+                    tag.className = 'status-tag danger';
+                    document.getElementById('statusLabel').textContent = 'EMERGENCY STOP';
+                    this.textContent = '⏳ 执行中...';
+                    this.disabled = true;
+                    setTimeout(function() {
+                        alert('✅ 紧急停机已执行，所有无人机已进入安全悬停状态。');
+                        tag.className = 'status-tag';
+                        document.getElementById('statusLabel').textContent = 'SYSTEM STABLE';
+                        document.getElementById('emergencyBtn').textContent = '🛑 紧急停机';
+                        document.getElementById('emergencyBtn').disabled = false;
+                    }, 2000);
+                }
+            });
+
+            // ============================================================
+            // 19. 初始化
+            // ============================================================
+            function init() {
+                // 主题
+                applyTheme(getPreferredTheme());
+                document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+                document.getElementById('themeToggleSettings').addEventListener('click', toggleTheme);
+
+                // Tab 切换
+                tabBtns.forEach(function(btn) {
+                    btn.addEventListener('click', function() { switchTab(this.dataset.tab); });
+                });
+
+                // 配置中心手风琴
+                document.querySelectorAll('[data-cfg]').forEach(function(el) {
+                    el.addEventListener('click', function() {
+                        var d = document.getElementById(el.getAttribute('data-cfg'));
+                        if (!d) return;
+                        var open = d.style.display !== 'none';
+                        d.style.display = open ? 'none' : 'block';
+                        var arrow = el.querySelector('.cfg-arrow');
+                        if (arrow) arrow.textContent = open ? '▾' : '▴';
+                    });
+                });
+
+                // --- 应急调度 ---
+                document.querySelectorAll('#tab5 input, #tab5 select').forEach(function(el) {
+                    el.addEventListener('input', renderStrategies);
+                    el.addEventListener('change', renderStrategies);
+                });
+                document.getElementById('saveBtn').addEventListener('click', handleSaveEmergency);
+                document.getElementById('clearBtn').addEventListener('click', handleClearEmergency);
+                document.getElementById('exportPdfBtn').addEventListener('click', exportEmergencyPDF);
+                document.getElementById('exportJsonBtn').addEventListener('click', exportEmergencyJSON);
+                document.getElementById('printBtn').addEventListener('click', printEmergencyPage);
+
+                // --- Tab 2 凯利交互 ---
+                // 首屏套用默认情景的赔率/胜率：HTML 里的滑条值只是占位，
+                // 否则 f* 会停在 0，一进来就显示"不值得投入"，与产品定位矛盾
+                var initSc = SCENARIOS[store.scenario.key] || SCENARIOS.normal;
+                document.getElementById('bSlider').value = initSc.b;
+                document.getElementById('pSlider').value = initSc.p;
+
+                document.getElementById('bSlider').addEventListener('input', function() { updateKelly(); recalcLogistics(); renderMonteCarlo(); });
+                document.getElementById('pSlider').addEventListener('input', function() { updateKelly(); recalcLogistics(); renderMonteCarlo(); });
+
+                // 初始化凯利计算（会回写全局情景）
+                updateKelly();
+
+                // --- Tab 1 情景注入 ---
+                var bar = document.getElementById('scenarioBar');
+                if (bar) {
+                    bar.querySelectorAll('[data-scenario]').forEach(function(btn) {
+                        btn.addEventListener('click', function() { setScenario(this.dataset.scenario); });
+                    });
+                }
+                renderScenarioBar();
+
+                // --- Tab 3 工单 ---
+                recalcLogistics();
+                // --- Tab 2 蒙特卡洛 ---
+                initMcChart();
+                var mcInitF = clamp(AirMind.kellyFraction(initSc.b, initSc.p), 0, 1.5);
+                document.getElementById('mcF').value = mcInitF;
+                var mcF = document.getElementById('mcF');
+                if (mcF) mcF.addEventListener('input', renderMonteCarlo);
+                var mcP = document.getElementById('mcPeriods');
+                if (mcP) mcP.addEventListener('change', renderMonteCarlo);
+                var mcAlign = document.getElementById('mcAlign');
+                if (mcAlign) mcAlign.addEventListener('click', function() {
+                    var b = parseFloat(document.getElementById('bSlider').value);
+                    var p = parseFloat(document.getElementById('pSlider').value);
+                    var fs = AirMind.kellyFraction(b, p);
+                    document.getElementById('mcF').value = Math.max(0, Math.min(1.5, fs));
+                    renderMonteCarlo();
+                    toast('🎯 仓位已对齐凯利建议值 f* = ' + fs.toFixed(3), 'success');
+                });
+                renderMonteCarlo();
+
+                // --- 风控 / 编排 ---
+                var riskRun = document.getElementById('riskRun');
+                if (riskRun) riskRun.addEventListener('click', reviewOnly);
+                var riskDispatch = document.getElementById('riskDispatch');
+                if (riskDispatch) riskDispatch.addEventListener('click', function() { orchestrate(); });
+                var traceClear = document.getElementById('traceClear');
+                if (traceClear) traceClear.addEventListener('click', clearTrace);
+                var traceExport = document.getElementById('traceExport');
+                if (traceExport) traceExport.addEventListener('click', exportTrace);
+                renderTrace();
+
+                var gaApply = document.getElementById('gaApply');
+                if (gaApply) gaApply.addEventListener('click', applyGlobalAssign);
+                var gaClear = document.getElementById('gaClear');
+                if (gaClear) gaClear.addEventListener('click', clearAssignments);
+
+                var addBtn = document.getElementById('addOrderBtn');
+                if (addBtn) {
+                    addBtn.addEventListener('click', function() {
+                        var name = (document.getElementById('ordName').value || '').trim() || '未命名工单';
+                        var w = parseFloat(document.getElementById('ordWeight').value) || 1;
+                        var d = parseFloat(document.getElementById('ordDist').value) || 1;
+                        var t = parseFloat(document.getElementById('ordTime').value) || 30;
+                        var pr = document.getElementById('ordPrio').value;
+                        if (w > 40 || d > 300) { toast('⚠️ 超出机队能力范围（≤40kg / ≤300km）', 'warn'); return; }
+                        var nid = orders.reduce(function(m, o) { return Math.max(m, o.id); }, 1000) + 1;
+                        orders.push({ id: nid, name: name, weight: w, distance: d, deadline: t, priority: pr });
+                        if (selectedOrderId === null) selectedOrderId = nid;
+                        persistOrders(); recalcLogistics();
+                        toast('➕ 工单 #' + nid + ' 已加入，匹配结果已重算', 'success');
+                    });
+                }
+
+                // --- Tab 4 PID 仿真 ---
+                initPidChart();
+                ['pidCraft', 'pidKp', 'pidKi', 'pidKd', 'pidWind'].forEach(function(id) {
+                    var el = document.getElementById(id);
+                    if (el) el.addEventListener('input', runPidSim);
+                });
+                var pReset = document.getElementById('pidReset');
+                if (pReset) pReset.addEventListener('click', function() {
+                    document.getElementById('pidCraft').value = '多点锁平开窗';
+                    document.getElementById('pidKp').value = 0.120;
+                    document.getElementById('pidKi').value = 0.080;
+                    document.getElementById('pidKd').value = 0.050;
+                    runPidSim();
+                    toast('↺ 已恢复推荐参数（P=0.120 I=0.080 D=0.050）', 'info');
+                });
+                var pStorm = document.getElementById('pidStorm');
+                if (pStorm) pStorm.addEventListener('click', function() {
+                    var w = store.scenario.windBase;
+                    document.getElementById('pidWind').value = Math.min(25, w);
+                    document.getElementById('pidCraft').value = SCENARIOS[store.scenario.key].weatherIdx >= 2 ? '多点锁平开窗' : document.getElementById('pidCraft').value;
+                    runPidSim();
+                    toast('🌧️ 已拉取当前情景风速 ' + w + ' m/s 进行抗扰验证', 'warn');
+                });
+                runPidSim();
+
+                // --- Tab 1 快捷入口：情景变化时同步刷新运力 ---
+                bus.on('scenario:change', function() { recalcLogistics(); });
+
+                // --- 深链恢复 ---
+                restoreTabFromHash();
+                window.addEventListener('hashchange', restoreTabFromHash);
+
+                // --- CDN 兜底提示 ---
+                window.addEventListener('load', function() {
+                    if (window.__ymCdnFailed || typeof echarts === 'undefined') {
+                        toast('⚠️ CDN 资源加载失败，已进入离线降级模式：图表停用，计算与导出 JSON 仍可用。', 'danger');
+                    }
+                });
+
+                // --- 图表 ---
+                initRadarChart();
+                initEmergencyChart();
+
+                // --- 首次渲染 ---
+                renderStrategies();
+                renderEmergencyHistory();
+                updateEmergencyChart();
+                renderDashboard();
+
+                // 总控数据定时更新
+                setInterval(function() {
+                    simulateDashboardData();
+                    renderDashboard();
+                }, 3000);
+
+                console.log('🛩️ Y.Mine · AirMind V2.1 已启动 · 单文件 SPA · 纯本地运行');
+                console.log('📦 纯本地处理 · 数据仅存浏览器');
+                console.log('📧 hellomind-y@outlook.com');
+                console.log('⚖️ 凯利公式交互引擎已启用 · 情景已注入: ' + SCENARIOS[store.scenario.key].label);
+                console.log('📋 应急记录数:', getEmergencyRecords().length);
+                window.__ymReady = true;
+            }
+
+            if (document.readyState === 'complete') {
+                init();
+            } else {
+                document.addEventListener('DOMContentLoaded', init);
+            }
+
+        })();
+    </script>
 
     <!-- 返回作品集链接 -->
     <a href="https://hellomind-star.github.io/ymine-validation-hub/" target="_blank" rel="noopener" style="position:fixed;right:14px;bottom:14px;z-index:9999;display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;background:rgba(15,17,26,.85);border:1px solid rgba(168,85,247,.4);color:#c4b5fd;font-size:12px;font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;text-decoration:none;backdrop-filter:blur(6px);opacity:.7;transition:opacity .2s" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.7'">🌌 Y.Mine 应用矩阵 · 返回作品集</a>
