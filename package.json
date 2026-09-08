@@ -1,0 +1,10 @@
+{
+  "name": "airmind-os",
+  "version": "2.1.2",
+  "description": "Y.Mine · AirMind V2.1 低空全域人机神经协同调度引擎（纯本地、零构建）",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/"
+  },
+  "license": "Apache-2.0"
+}
