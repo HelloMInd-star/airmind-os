@@ -1285,6 +1285,149 @@
     }
 
     // ================================================================
+    // 10. 空域地理：投影 / 航线 / 禁飞区入侵检测
+    // --------------------------------------------------------------
+    // 数字孪生地图的纯数学部分。之所以放进算法层而不是渲染层，
+    // 是因为「飞机有没有闯进禁飞区」是要被测试的——它是安全约束，
+    // 和 Guardrail 同一性质，不能只靠肉眼看画面对不对。
+    // ================================================================
+
+    var EARTH_R = 6371;   // km
+
+    /** 两点球面距离（km） */
+    function haversineKm(a, b) {
+        var dLat = (b.lat - a.lat) * Math.PI / 180;
+        var dLng = (b.lng - a.lng) * Math.PI / 180;
+        var la1 = a.lat * Math.PI / 180, la2 = b.lat * Math.PI / 180;
+        var h = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(la1) * Math.cos(la2) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+        return 2 * EARTH_R * Math.asin(Math.min(1, Math.sqrt(h)));
+    }
+
+    /** 方位角（度，0=正北，顺时针） */
+    function bearingDeg(a, b) {
+        var la1 = a.lat * Math.PI / 180, la2 = b.lat * Math.PI / 180;
+        var dLng = (b.lng - a.lng) * Math.PI / 180;
+        var y = Math.sin(dLng) * Math.cos(la2);
+        var x = Math.cos(la1) * Math.sin(la2) - Math.sin(la1) * Math.cos(la2) * Math.cos(dLng);
+        var br = Math.atan2(y, x) * 180 / Math.PI;
+        return (br + 360) % 360;
+    }
+
+    /** 经纬度线性插值（城市尺度足够精确） */
+    function lerpGeo(a, b, t) {
+        return { lng: a.lng + (b.lng - a.lng) * t, lat: a.lat + (b.lat - a.lat) * t };
+    }
+
+    /** 航线各段累积长度（km），用于按里程比例定位 */
+    function routeLengths(waypoints) {
+        var cum = [0];
+        for (var i = 1; i < waypoints.length; i++) {
+            cum.push(cum[i - 1] + haversineKm(waypoints[i - 1], waypoints[i]));
+        }
+        return cum;
+    }
+
+    /**
+     * 按里程比例 t∈[0,1] 求航线上的位置与朝向
+     * @returns {{lng:number, lat:number, heading:number, segIndex:number}}
+     */
+    function routePointAt(waypoints, t) {
+        if (!waypoints || !waypoints.length) return null;
+        if (waypoints.length === 1) {
+            return { lng: waypoints[0].lng, lat: waypoints[0].lat, heading: 0, segIndex: 0 };
+        }
+        var cum = routeLengths(waypoints);
+        var total = cum[cum.length - 1];
+        if (total <= 0) return { lng: waypoints[0].lng, lat: waypoints[0].lat, heading: 0, segIndex: 0 };
+
+        var target = clamp(t, 0, 1) * total;
+        var i = 1;
+        while (i < cum.length - 1 && cum[i] < target) i++;
+        var segLen = cum[i] - cum[i - 1];
+        var frac = segLen > 0 ? (target - cum[i - 1]) / segLen : 0;
+        var pos = lerpGeo(waypoints[i - 1], waypoints[i], frac);
+        return {
+            lng: pos.lng, lat: pos.lat,
+            heading: bearingDeg(waypoints[i - 1], waypoints[i]),
+            segIndex: i - 1
+        };
+    }
+
+    /** 经纬度 → 画布像素（等距圆柱投影，按纬度修正经度缩放） */
+    function projectToCanvas(lng, lat, view) {
+        var kmPerDegLat = 111.32;
+        var kmPerDegLng = 111.32 * Math.cos(view.centerLat * Math.PI / 180);
+        var dxKm = (lng - view.centerLng) * kmPerDegLng;
+        var dyKm = (lat - view.centerLat) * kmPerDegLat;
+        return {
+            x: view.w / 2 + (dxKm / view.spanKm) * view.w,
+            y: view.h / 2 - (dyKm / view.spanKm) * view.h
+        };
+    }
+
+    /** 画布像素 → 经纬度（projectToCanvas 的逆变换） */
+    function unprojectFromCanvas(x, y, view) {
+        var kmPerDegLat = 111.32;
+        var kmPerDegLng = 111.32 * Math.cos(view.centerLat * Math.PI / 180);
+        var dxKm = ((x - view.w / 2) / view.w) * view.spanKm;
+        var dyKm = ((view.h / 2 - y) / view.h) * view.spanKm;
+        return { lng: view.centerLng + dxKm / kmPerDegLng, lat: view.centerLat + dyKm / kmPerDegLat };
+    }
+
+    /** 点是否在圆形禁飞区内 */
+    function pointInCircleKm(pt, center, radiusKm) {
+        return haversineKm(pt, center) <= radiusKm;
+    }
+
+    /** 射线法：点是否在多边形内 */
+    function pointInPolygon(pt, poly) {
+        var inside = false;
+        for (var i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+            var xi = poly[i].lng, yi = poly[i].lat;
+            var xj = poly[j].lng, yj = poly[j].lat;
+            var intersect = ((yi > pt.lat) !== (yj > pt.lat)) &&
+                (pt.lng < (xj - xi) * (pt.lat - yi) / ((yj - yi) || 1e-12) + xi);
+            if (intersect) inside = !inside;
+        }
+        return inside;
+    }
+
+    /**
+     * 空域合规检查：飞机是否闯入禁飞区 / 是否超出高度上限
+     *
+     * 这与 Guardrail 同性质——是安全硬约束，不是"提示"。
+     * 返回 breaches 数组，空数组代表合规。
+     *
+     * @param {object} ac    {lng, lat, alt, id, callsign}
+     * @param {Array}  zones [{id, name, type:'circle'|'poly', center?, radiusKm?, points?, ceilingM?, level:'block'|'warn'}]
+     */
+    function checkAirspace(ac, zones) {
+        var breaches = [];
+        (zones || []).forEach(function(z) {
+            var inside;
+            if (z.type === 'poly') inside = pointInPolygon(ac, z.points || []);
+            else inside = pointInCircleKm(ac, z.center, z.radiusKm);
+            if (!inside) return;
+            // 高度上限之下的空域才生效（在禁飞区上方飞过不算违规）
+            if (z.ceilingM !== undefined && z.ceilingM !== null && ac.alt > z.ceilingM) return;
+            breaches.push({
+                zoneId: z.id, zoneName: z.name,
+                level: z.level || 'block',
+                alt: ac.alt, ceilingM: z.ceilingM
+            });
+        });
+        return breaches;
+    }
+
+    /** 批量检查，只返回违规的飞机 */
+    function findAirspaceViolations(aircraft, zones) {
+        return (aircraft || []).map(function(ac) {
+            return { ac: ac, breaches: checkAirspace(ac, zones) };
+        }).filter(function(r) { return r.breaches.length; });
+    }
+
+    // ================================================================
     // 导出
     // ================================================================
     return {
@@ -1314,6 +1457,12 @@
         generateOrders: generateOrders, generateFleet: generateFleet,
         generateWeatherSeries: generateWeatherSeries,
         // 分层求解
-        HIER: HIER, hierarchicalAssign: hierarchicalAssign, autoAssign: autoAssign
+        HIER: HIER, hierarchicalAssign: hierarchicalAssign, autoAssign: autoAssign,
+        // 空域地理
+        EARTH_R: EARTH_R, haversineKm: haversineKm, bearingDeg: bearingDeg, lerpGeo: lerpGeo,
+        routeLengths: routeLengths, routePointAt: routePointAt,
+        projectToCanvas: projectToCanvas, unprojectFromCanvas: unprojectFromCanvas,
+        pointInCircleKm: pointInCircleKm, pointInPolygon: pointInPolygon,
+        checkAirspace: checkAirspace, findAirspaceViolations: findAirspaceViolations
     };
 });

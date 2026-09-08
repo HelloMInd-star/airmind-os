@@ -139,6 +139,13 @@
                 var stReset = document.getElementById('stressReset');
                 if (stReset) stReset.addEventListener('click', resetStress);
 
+                // --- 数字孪生空域 ---
+                initAirspace();                    // Tab1 默认可见，可直接初始化
+                bindAirspaceControls();
+                window.addEventListener('resize', function() {
+                    if (window.AirMindAirspace) window.AirMindAirspace.resize();
+                });
+
                 // --- 风控 / 编排 ---
                 var riskRun = document.getElementById('riskRun');
                 if (riskRun) riskRun.addEventListener('click', reviewOnly);

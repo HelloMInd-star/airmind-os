@@ -63,7 +63,12 @@
                     history.replaceState(null, '', '#' + tabId);
                 }
                 setTimeout(function() {
-                    if (tabId === 'tab1' && window.radarChartInstance) window.radarChartInstance.resize();
+                    if (tabId === 'tab1') {
+                        if (window.radarChartInstance) window.radarChartInstance.resize();
+                        // Canvas 同样受"隐藏容器 0 宽度"影响，切过来必须先 resize
+                        if (typeof initAirspace === 'function') initAirspace();
+                        else if (window.AirMindAirspace) window.AirMindAirspace.resize();
+                    }
                     if (tabId === 'tab5' && emergencyChartInstance) emergencyChartInstance.resize();
                     // Tab2：ECharts 在隐藏容器上 init 会拿到 0 宽度，
                     // 必须切过来时 resize 并重新渲染，否则图表会一直缩在角落

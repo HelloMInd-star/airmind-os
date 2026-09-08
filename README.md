@@ -11,7 +11,8 @@
 ![ECharts](https://img.shields.io/badge/ECharts-5.4-cyan?style=for-the-badge&logo=apacheecharts)
 ![Deploy](https://img.shields.io/badge/Deploy-GitHub%20Pages-black?style=for-the-badge&logo=githubpages)
 ![Build](https://img.shields.io/badge/Build-零构建-silver?style=for-the-badge&logo=gnubash)
-![Tests](https://img.shields.io/badge/Tests-86%20passing-brightgreen?style=for-the-badge&logo=vitest)
+![Tests](https://img.shields.io/badge/Tests-107%20passing-brightgreen?style=for-the-badge&logo=vitest)
+![Map](https://img.shields.io/badge/Map-Canvas%20Digital%20Twin-blue?style=for-the-badge)
 ![Guardrail](https://img.shields.io/badge/Guardrail-11%20rules-red?style=for-the-badge&logo=shield)
 ![Storage](https://img.shields.io/badge/Storage-LocalStorage-orange?style=for-the-badge)
 
@@ -209,6 +210,46 @@ Agent 负责**判断**，Guardrail 负责**复算**。两者独立——这是�
 
 > **关于"万级工单"**：10000 单能跑通（8.2s，增益 +6.2%），但这个耗时**必须放进 Web Worker**，否则主线程会卡死 8 秒。当前 UI 的规模选项上限是 2000 单——这是能保持交互流畅的真实边界。
 
+### Tab 1 数字孪生空域：为什么不用真实瓦片地图
+
+第一反应是接 MapLibre / Leaflet，但权衡后选了 **Canvas 自绘**：
+
+| 方案 | 问题 |
+| :--- | :--- |
+| MapLibre + OSM 瓦片 | 引入 ~800KB 依赖；国内网络瓦片服务不稳定，**面试现场可能直接白屏**；破坏"双击就能跑"与秒开 |
+| Canvas 自绘 | 需要自己写投影与渲染，但零依赖、离线可用、与暗色主题天然一致 |
+
+更关键的是：**低空态势真正需要的是"空域网格 + 禁飞区 + 航线"，不是街道地图。** 真实底图在这里是干扰信息。
+
+功能：
+
+- **18 架航空器**沿 14 条航线循环执飞，机体朝向 = 实时航向（按 `bearingDeg` 计算）
+- **4 个管制空域**（圆形进近管制区 / 多边形政务管制区 / 军事限高区），含高度上限语义
+- 航迹拖尾、航线流动虚线、点击查看详情、悬停提示
+- 播放 / 暂停 / 0.5–4× 变速 / 图层开关
+- 实时统计：在空架数、空域违规、平均高度、渲染帧率
+
+**空域违规检测不是装饰**。它和 Guardrail 同性质——是安全硬约束，所以地理计算放进 `algorithms.js` 而不是渲染层，可以被单元测试覆盖。含一条回归测试：
+
+```js
+// 起降点被判违规 → 净空区不应覆盖起降点本身
+vertiports.forEach(v => {
+  assert.equal(A.checkAirspace(v, zones).length, 0);
+});
+```
+
+这条测试对应一个真实 bug：早期把禁飞区圆心直接压在机场上，导致 **39% 的飞机"一起飞就违规"**——那不是安全能力强，是规则建模错了。修正后违规率降到 **2/18**。
+
+### 真实数据接入（带优雅降级）
+
+`12-livefeed.js` 接 **OpenSky ADS-B**（真实航班）与 **Open-Meteo**（真实气象，无需 API Key）。
+
+设计原则是**优雅降级**：网络不通、CORS 被拦、API 限流、返回空——任何一种情况都退回模拟推演，绝不留下白屏。界面徽章如实显示当前是「真实 ADS-B」还是「模拟推演」。
+
+> ⚠️ **未能自测**：沙盒网络限制下 OpenSky / Open-Meteo 均返回 403，请求逻辑按「CORS + 超时（AbortController, 9s）+ 空结果」三层防御编写，**需在真实网络下验证**。这是本项目少数未经实测的部分。
+
+*（注：OpenSky 免费账号有速率限制，频繁点击「接真实数据」可能触发 429，此时同样会降级。）*
+
 ### Tab 4 控制仿真
 
 - 三种仿生"窗型"对应二阶系统参数：`无锁落地窗 ζ=0.18 / 推拉活动窗 ζ=0.45 / 多点锁平开窗 ζ=0.72`
@@ -338,7 +379,7 @@ V2.1 把所有纯计算抽到了 `assets/js/core/algorithms.js`——**无 DOM �
 npm test        # 等价于 node --test tests/，零依赖，无需 npm install
 ```
 
-**86 项测试，重点是不变量而非快照值**——把今天的输出钉死成断言，会让明天的重构寸步难行：
+**107 项测试，重点是不变量而非快照值**——把今天的输出钉死成断言，会让明天的重构寸步难行：
 
 | 测试类型 | 覆盖内容 |
 | :--- | :--- |
@@ -353,6 +394,8 @@ npm test        # 等价于 node --test tests/，零依赖，无需 npm install
 | **可复现性** | 蒙特卡洛同种子必须逐位一致（mulberry32） |
 | **性能** | 20 工单 × 28 槽位全局指派 < 200ms；1000 单分层求解 < 2s |
 | **数据生成** | 订单流 >80% 理论可行；气象时序均值回归收敛；机队槽位编号唯一 |
+| **空域地理** | 投影与反投影互逆；航点端点精确、中间无跳变；高度上限之上飞越合规 |
+| **★ 回归** | 起降点不得被自身净空区误判（曾导致 39% 误报） |
 
 > **为什么先做这步**：Agent 编排层的每个决策最终都落到这些函数上。地基不可信时，上层编排只会把局部最优放大成系统性错误。
 
@@ -364,6 +407,8 @@ npm test        # 等价于 node --test tests/，零依赖，无需 npm install
 | Guardrail 早期版本直接复用 Agent 结论 | 独立性测试：清空规则库后 Guardrail 随之失效。改为独立复算物理约束后才真正成为第二道防线 |
 | 蒙特卡洛期数文案写死 200 | 实际推演用 120 期，UI 却显示"200 期推演下…"，读数自相矛盾 |
 | **分层求解在运力宽松时反比贪心差 2.6%** | 压测矩阵暴露的：近似损失超过了优化收益。修法是加"取两者较优"保底，把这变成一条可测试的硬承诺 |
+| **禁飞区压在起降点上，39% 飞机"一起飞就违规"** | 手动核对违规率时发现的——规则建模错了，不是安全能力强。回归测试已固化 |
+| **数据源徽章 id 不匹配**（HTML `airspaceSource` vs JS `airSource`） | 端到端测试显示徽章始终为空 |
 
 ## 🗺️ 路线图
 
@@ -373,7 +418,9 @@ npm test        # 等价于 node --test tests/，零依赖，无需 npm install
 | V2.1.2 | 算法层抽离 + 40 项测试 + 匈牙利全局指派 + 多期蒙特卡洛 | ✅ 已完成 |
 | V2.1.3 | UI 层拆分为 10 个模块 + 修复 ECharts 隐藏容器 0 宽度 bug | ✅ 已完成 |
 | V2.1.4 | 数据层（订单流/机队/气象时序）+ 分层求解（千级工单可在浏览器跑完） | ✅ 已完成 |
-| V2.2.1 | **Web Worker**：把万级工单求解移出主线程（当前 10000 单需 8.2s，会卡 UI） | 📋 规划中 |
+| V2.3 | **数字孪生空域地图** + 真实数据接入（OpenSky / Open-Meteo） | ✅ 已完成 |
+| V2.3.1 | 验证真实数据链路（沙盒无法自测，需在真实网络下确认） | 🚧 待验证 |
+| V2.4 | **Web Worker**：把万级工单求解移出主线程（当前 10000 单需 8.2s，会卡 UI） | 📋 规划中 |
 | V2.2 | **Agent 编排层**：风控 Agent + Guardrail + 决策轨迹（✅ 已完成）→ 感知 / 定价 / 派单 Agent + 反射循环 | 🚧 进行中 |
 | V2.3 | **数字孪生地图**：接入地图 SDK，可视化禁飞区与实时航线 | 📋 规划中 |
 | V2.4 | **历史数据回放**：按时间轴回放空域态势变化 | 📋 规划中 |
@@ -414,11 +461,14 @@ airmind-os/
 │       ├── 07-logistics.js       # Tab3 渲染 + 风控 Agent + Guardrail + 编排层
 │       ├── 08-montecarlo.js      # Tab2 多期蒙特卡洛风险推演
 │       ├── 09-pid.js             # Tab4 串级 PID 仿真
-│       └── 10-init.js            # 子Tab切换 / 紧急停机 / 应用初始化
+│       ├── 10-init.js            # 子Tab切换 / 紧急停机 / 应用初始化
+│       ├── 11-airspace.js        # 数字孪生空域（Canvas 自绘，零依赖）
+│       └── 12-livefeed.js        # 真实数据接入（OpenSky / Open-Meteo，带降级）
 ├── tests/
 │   ├── algorithms.test.js        # 40 项：凯利 / 定价 / 指派 / PID / 应急
 │   ├── risk.test.js              # 24 项：风控 Agent / Guardrail
-│   └── data-hier.test.js         # 22 项：数据层 / 分层求解
+│   ├── data-hier.test.js         # 22 项：数据层 / 分层求解
+│   └── airspace.test.js          # 21 项：投影 / 航线 / 禁飞区入侵检测
 ├── package.json                  # 仅提供 npm test 快捷入口
 ├── README.md
 └── LICENSE                       # Apache 2.0

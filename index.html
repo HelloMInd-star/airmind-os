@@ -1081,6 +1081,57 @@
                 </div>
             </div>
 
+            <!-- 数字孪生空域：Canvas 自绘，零外部依赖 -->
+            <div class="ym-card" style="margin-bottom:16px;">
+                <div class="ym-card-header">
+                    <div class="ym-card-title">
+                        🛰️ 数字孪生空域
+                        <span class="badge" id="airSource" style="margin-left:6px;">模拟推演</span>
+                    </div>
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+                        <button class="btn btn-sm" id="airPlay" aria-label="播放或暂停">⏸ 暂停</button>
+                        <button class="btn btn-sm" id="airSpeed" aria-label="切换速度">1×</button>
+                        <button class="btn btn-sm" id="airZones" aria-pressed="true">🚫 禁飞区</button>
+                        <button class="btn btn-sm" id="airTrails" aria-pressed="true">〰 航迹</button>
+                        <button class="btn btn-sm" id="airLive">📡 接真实数据</button>
+                    </div>
+                </div>
+
+                <div style="display:flex;gap:12px;flex-wrap:wrap;">
+                    <div style="flex:1;min-width:340px;position:relative;">
+                        <canvas id="airCanvas"
+                                style="width:100%;height:360px;display:block;border-radius:6px;background:radial-gradient(ellipse at 50% 40%,#111726 0%,#0a0d15 100%);cursor:crosshair;"
+                                role="img" aria-label="空域态势图"></canvas>
+                        <div id="airTip" style="position:absolute;pointer-events:none;display:none;z-index:5;
+                             background:rgba(10,13,21,.94);border:1px solid var(--ym-border);border-radius:4px;
+                             padding:6px 9px;font-size:11px;color:var(--ym-text-secondary);white-space:nowrap;
+                             font-family:'JetBrains Mono',monospace;"></div>
+                    </div>
+
+                    <div style="width:250px;min-width:220px;display:flex;flex-direction:column;gap:8px;">
+                        <div class="ym-grid-2-inner" style="gap:8px;">
+                            <div class="ym-kpi"><div class="value blue" id="airCount" style="font-size:17px;">—</div><div class="label">在空航空器</div></div>
+                            <div class="ym-kpi"><div class="value" id="airViol" style="font-size:17px;">—</div><div class="label">空域违规</div></div>
+                            <div class="ym-kpi"><div class="value cyan" id="airAvgAlt" style="font-size:17px;">—</div><div class="label">平均高度</div></div>
+                            <div class="ym-kpi"><div class="value gold" id="airFps" style="font-size:17px;">—</div><div class="label">渲染帧率</div></div>
+                        </div>
+                        <div id="airSelected" style="font-size:11.5px;color:var(--ym-text-muted);background:var(--ym-bg-elevated);
+                             border-radius:4px;padding:8px 10px;border-left:3px solid var(--ym-blue);line-height:1.7;min-height:74px;">
+                            点击图中航空器查看详情
+                        </div>
+                        <div id="airViolList" style="font-size:11px;max-height:96px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;"></div>
+                    </div>
+                </div>
+
+                <div style="margin-top:8px;font-size:10.5px;color:var(--ym-text-dim);line-height:1.6;">
+                    <span style="color:var(--ym-cyan);">━</span> 航线
+                    <span style="color:var(--ym-danger);margin-left:10px;">◯</span> 禁飞区
+                    <span style="color:var(--ym-gold);margin-left:10px;">▲</span> 航空器（朝向 = 航向）
+                    <span style="color:var(--ym-blue);margin-left:10px;">◆</span> 起降点
+                    <span id="airHint" style="margin-left:10px;"></span>
+                </div>
+            </div>
+
             <!-- 雷达图 + 稳态阈值 -->
             <div class="ym-grid-2">
                 <div class="ym-card">
@@ -1843,6 +1894,8 @@
     <script src="assets/js/modules/08-montecarlo.js"></script>
     <script src="assets/js/modules/09-pid.js"></script>
     <script src="assets/js/modules/10-init.js"></script>
+    <script src="assets/js/modules/11-airspace.js"></script>
+    <script src="assets/js/modules/12-livefeed.js"></script>
 
     <!-- 返回作品集链接 -->
     <a href="https://hellomind-star.github.io/ymine-validation-hub/" target="_blank" rel="noopener" style="position:fixed;right:14px;bottom:14px;z-index:9999;display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;background:rgba(15,17,26,.85);border:1px solid rgba(168,85,247,.4);color:#c4b5fd;font-size:12px;font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;text-decoration:none;backdrop-filter:blur(6px);opacity:.7;transition:opacity .2s" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.7'">🌌 Y.Mine 应用矩阵 · 返回作品集</a>
