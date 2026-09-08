@@ -133,6 +133,12 @@
                 });
                 renderMonteCarlo();
 
+                // --- 压力测试 ---
+                var stRun = document.getElementById('stressRun');
+                if (stRun) stRun.addEventListener('click', runStress);
+                var stReset = document.getElementById('stressReset');
+                if (stReset) stReset.addEventListener('click', resetStress);
+
                 // --- 风控 / 编排 ---
                 var riskRun = document.getElementById('riskRun');
                 if (riskRun) riskRun.addEventListener('click', reviewOnly);

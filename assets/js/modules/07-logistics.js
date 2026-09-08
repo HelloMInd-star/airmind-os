@@ -21,13 +21,15 @@
             var PRIO_COLOR = { '紧急': 'var(--ym-danger)', '高优先级': 'var(--ym-gold)', '标准': 'var(--ym-blue)', '普通': 'var(--ym-cyan)' };
             var selectedOrderId = null;
 
+            var RENDER_LIMIT = 50;   // 大批量工单时只渲染前 N 条，避免 DOM 卡死
+
             function renderOrders() {
                 var host = document.getElementById('orderList');
                 if (!host) return;
                 if (orders.length === 0) {
                     host.innerHTML = '<div style="text-align:center;padding:20px;color:var(--ym-text-dim);font-size:12px;">工单池为空，请在下方新增</div>';
                 } else {
-                    host.innerHTML = orders.map(function(o) {
+                    host.innerHTML = orders.slice(0, RENDER_LIMIT).map(function(o) {
                         var done = assignments[o.id];
                         var sel = o.id === selectedOrderId;
                         var assigned = done ? FLEET.filter(function(f) { return f.id === done; })[0] : null;
@@ -175,7 +177,7 @@
                     return;
                 }
 
-                host.innerHTML = r.optimal.pairs.map(function(p) {
+                host.innerHTML = r.optimal.pairs.slice(0, RENDER_LIMIT).map(function(p) {
                     var o = p.order;
                     if (!p.slot) {
                         return '<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:var(--ym-bg-inset);border-radius:4px;border-left:3px solid var(--ym-text-dim);font-size:12px;">' +
@@ -374,6 +376,86 @@
                 });
                 toast(msg, g.violations.length ? 'warn' : 'success');
                 return { ok: true, assessment: a, guard: g };
+            }
+
+            // ============================================================
+            // 压力测试：批量造负载 → 分层求解 → 与贪心对比
+            // ============================================================
+            var STRESS_FLAG = 'ym_v3_stress';   // 标记当前处于压测态（不写 localStorage）
+
+            function runStress() {
+                var sizeEl = document.getElementById('stressSize');
+                var ratioEl = document.getElementById('stressRatio');
+                var n = parseInt(sizeEl.value, 10) || 500;
+                var ratio = parseFloat(ratioEl.value) || 0.5;
+
+                var t0 = (window.performance && performance.now) ? performance.now() : Date.now();
+                orders = AirMind.generateOrders(n, { seed: 2026 });
+                FLEET.length = 0;
+                AirMind.generateFleet(Math.max(6, Math.round(n * ratio)), { seed: 7 })
+                    .forEach(function(f) { FLEET.push(f); });
+                assignments = {};
+                selectedOrderId = orders.length ? orders[0].id : null;
+                safeStore.set(STRESS_FLAG, 1);
+
+                var r = AirMind.autoAssign(orders, FLEET, store.scenario, { minScore: 35 });
+                var t1 = (window.performance && performance.now) ? performance.now() : Date.now();
+
+                document.getElementById('stMode').textContent =
+                    r.mode === 'exact' ? '精确匈牙利' : '分层近似';
+                document.getElementById('stTime').textContent = Math.round(t1 - t0) + 'ms';
+                document.getElementById('stTotal').textContent = r.optimal.total.toFixed(0);
+                var gainEl = document.getElementById('stGain');
+                if (r.greedy) {
+                    gainEl.textContent = (r.improvement > 0 ? '+' : '') + r.improvement + '%';
+                    gainEl.className = 'value ' + (r.improvement > 0 ? 'success' : '');
+                } else {
+                    gainEl.textContent = '—';
+                }
+
+                var lines = [
+                    '工单 <strong>' + n + '</strong> 单 · 槽位 <strong>' + r.slotCount +
+                        '</strong> 个 · 紧张度 ' + ratio + ' 槽位/单',
+                    '已指派 <strong>' + r.optimal.assignedCount + '</strong> 单' +
+                        (r.optimal.unassignedCount
+                            ? '，<span style="color:var(--ym-gold-light);">' + r.optimal.unassignedCount + ' 单无可用运力</span>'
+                            : '')
+                ];
+                if (r.greedy) {
+                    lines.push('贪心 ' + r.greedy.total.toFixed(0) + ' → 最优 ' + r.optimal.total.toFixed(0) +
+                        (r.improvement > 0
+                            ? '（<span style="color:var(--ym-success);">+' + r.improvement + '%</span>）'
+                            : '（运力宽松，贪心已接近最优，自动采用贪心解）'));
+                }
+                if (r.mode === 'hierarchical') {
+                    lines.push('分窗 <strong>' + r.windowCount + '</strong> 个 · 局部交换 ' +
+                        r.exchangeRounds + ' 轮 · 采用 <strong>' +
+                        (r.adopted === 'greedy' ? '贪心（分层未占优）' : '分层解') + '</strong>');
+                }
+                if (n > RENDER_LIMIT) {
+                    lines.push('<span style="color:var(--ym-text-dim);">列表仅渲染前 ' +
+                        RENDER_LIMIT + ' 条，避免 DOM 卡死</span>');
+                }
+                document.getElementById('stDetail').innerHTML = lines.join('<br/>');
+
+                recalcLogistics();
+                toast('🔥 ' + n + ' 单压测完成：' + Math.round(t1 - t0) + 'ms', 'success');
+            }
+
+            function resetStress() {
+                safeStore.remove(STRESS_FLAG);
+                orders = safeStore.get('orders', null) || DEFAULT_ORDERS.slice();
+                assignments = safeStore.get('assignments', {}) || {};
+                selectedOrderId = orders.length ? orders[0].id : null;
+                restoreDefaultFleet();
+                ['stMode', 'stTime', 'stTotal', 'stGain'].forEach(function(id) {
+                    var el = document.getElementById(id);
+                    if (el) el.textContent = '—';
+                });
+                var d = document.getElementById('stDetail');
+                if (d) d.innerHTML = '';
+                recalcLogistics();
+                toast('↺ 已恢复默认工单与机队', 'info');
             }
 
             /** 仅审查不落地 */

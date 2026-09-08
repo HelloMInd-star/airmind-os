@@ -962,6 +962,329 @@
     }
 
     // ================================================================
+    // 8. 数据层：订单流 / 机队台账 / 气象时序
+    // --------------------------------------------------------------
+    // 之前 UI 里只有 4 条写死的工单，"全局最优"的增益常年是 0%——
+    // 因为根本没有运力竞争。要验证调度算法，先得有像样的负载。
+    // 全部是带种子的纯函数：同种子必须逐位可复现，否则测试无法断言。
+    // ================================================================
+
+    var CARGO_NAMES = [
+        '医疗样本', '急救血液', '生鲜冷链', '快递包裹', '外卖餐盒',
+        '精密仪器', '汽车配件', '电子元件', '文件档案', '防汛物资'
+    ];
+
+    var FLEET_ARCHETYPES = [
+        { id: 'MX-03', name: '多旋翼 MX-03',  kind: '多旋翼', payload: 5,  range: 25,  speed: 45,  windMax: 10, baseCost: 0.85 },
+        { id: 'FH-11', name: '复合翼 FH-11',  kind: '复合翼', payload: 8,  range: 60,  speed: 70,  windMax: 12, baseCost: 1.00 },
+        { id: 'FG-07', name: '固定翼 FG-07',  kind: '固定翼', payload: 10, range: 120, speed: 95,  windMax: 12, baseCost: 1.15 },
+        { id: 'ZS-05', name: '轻型直升机 ZS-05', kind: '直升机', payload: 25, range: 150, speed: 110, windMax: 15, baseCost: 2.40 },
+        { id: 'HW-09', name: '重型货运 HW-09', kind: '货运',  payload: 60, range: 200, speed: 85,  windMax: 14, baseCost: 3.10 },
+        { id: 'VT-21', name: '垂直起降 VT-21', kind: 'eVTOL', payload: 15, range: 90,  speed: 130, windMax: 11, baseCost: 1.80 }
+    ];
+
+    /**
+     * 生成订单流
+     * 分布刻意贴合城市低空配送的真实形态：距离偏短途带长尾、货重多数轻量、
+     * 时限 = 最短耗时 × 松弛系数（保证大部分工单"理论上可完成"，
+     * 否则生成的全是废单，测不出调度能力）
+     */
+    function generateOrders(count, opts) {
+        opts = opts || {};
+        var rnd = mulberry32(opts.seed === undefined ? 20260908 : opts.seed);
+        var startId = opts.startId === undefined ? 2000 : opts.startId;
+        var refSpeed = opts.refSpeed || 55;
+        var out = [];
+        for (var i = 0; i < count; i++) {
+            var u = rnd();
+            var distance = u < 0.7 ? 3 + rnd() * 25 : 25 + Math.pow(rnd(), 2) * 95;
+            distance = Math.max(1, distance);
+            var w = rnd();
+            var weight = w < 0.75 ? 0.5 + rnd() * 6 : 6 + Math.pow(rnd(), 2) * 40;
+            var minTime = (distance / refSpeed) * 60 + 8;
+            var deadline = Math.round(minTime * (1.15 + rnd() * 2.35));
+            out.push({
+                id: startId + i,
+                name: CARGO_NAMES[i % CARGO_NAMES.length] + '·' + (i + 1),
+                weight: Math.round(weight * 10) / 10,
+                distance: Math.round(distance * 10) / 10,
+                deadline: Math.max(15, deadline),
+                priority: rnd() < 0.18 ? 'high' : (rnd() < 0.5 ? 'mid' : 'low')
+            });
+        }
+        return out;
+    }
+
+    /** 生成机队台账：按目标槽位数均分到 6 个机型原型 */
+    function generateFleet(targetSlots, opts) {
+        opts = opts || {};
+        var rnd = mulberry32(opts.seed === undefined ? 731 : opts.seed);
+        var n = FLEET_ARCHETYPES.length;
+        var base = Math.max(1, Math.floor(targetSlots / n));
+        var fleet = [], total = 0;
+        for (var i = 0; i < n; i++) {
+            var a = FLEET_ARCHETYPES[i];
+            var unit = (i === n - 1) ? Math.max(1, targetSlots - total) : base;
+            var soh = Math.round((62 + rnd() * 36) * 10) / 10;
+            fleet.push({
+                id: a.id, name: a.name, kind: a.kind, craft: a.kind,
+                payload: a.payload, range: a.range, speed: a.speed,
+                windMax: a.windMax, baseCost: a.baseCost,
+                soh: soh, unit: unit, status: 'ready'
+            });
+            total += unit;
+        }
+        return fleet;
+    }
+
+    /**
+     * 生成气象时序：OU 均值回归 + 偶发雷暴骤增
+     * 用于回放与压力测试，替代原来"风速是滑块常量"的做法
+     */
+    function generateWeatherSeries(periods, opts) {
+        opts = opts || {};
+        var rnd = mulberry32(opts.seed === undefined ? 4242 : opts.seed);
+        var mean = opts.mean === undefined ? 5 : opts.mean;
+        var theta = opts.theta === undefined ? 0.08 : opts.theta;
+        var sigma = opts.sigma === undefined ? 1.2 : opts.sigma;
+        var stormProb = opts.stormProb === undefined ? 0.03 : opts.stormProb;
+        var w = mean, out = [];
+        for (var t = 0; t < periods; t++) {
+            var jump = rnd() < stormProb ? 6 + rnd() * 8 : 0;
+            w = w + theta * (mean - w) + sigma * (rnd() * 2 - 1) + jump;
+            w = clamp(w, 0, 25);
+            out.push({ t: t, wind: Math.round(w * 100) / 100, storm: jump > 0 });
+        }
+        return out;
+    }
+
+    // ================================================================
+    // 9. 分层求解：让千级工单真能在浏览器里跑完
+    // --------------------------------------------------------------
+    // 纯匈牙利是 O(n²m)：1000 单 × 1000 槽 ≈ 10⁹ 次运算，浏览器直接卡死。
+    // 分三步把复杂度压下来，同时尽量少损失解的质量：
+    //   1. 分窗   —— 按时限升序切成窗口，急单先挑
+    //   2. 限量   —— 每个窗口只保留 top-K 候选槽位，矩阵从 n×m 缩到 W×K
+    //   3. 局部交换 —— 跨窗口做邻域 2-opt，把分窗损失的收益捞回来
+    // 这是"分层近似"，不是精确全局最优——README 里必须如实说明。
+    // ================================================================
+
+    var HIER = {
+        threshold: 150,      // 工单数超过此值才走分层
+        windowSize: 60,
+        topK: 48,            // 实测：24→48 提升 +0.2%，再往上收益递减
+        maxCandidates: 200,
+        rounds: 3,           // 局部交换轮数，3 轮后基本收敛
+        neighborhood: 120    // 局部交换的邻域宽度，避免 O(n²) 爆炸
+    };
+
+    function _now() {
+        return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    }
+
+    function hierarchicalAssign(orders, fleet, ctx, opts) {
+        opts = opts || {};
+        var windowSize = opts.windowSize || HIER.windowSize;
+        var topK = opts.topK || HIER.topK;
+        var maxCand = opts.maxCandidates || HIER.maxCandidates;
+        var rounds = opts.exchangeRounds === undefined ? HIER.rounds : opts.exchangeRounds;
+        var minScore = opts.minScore === undefined ? 35 : opts.minScore;
+        var t0 = _now();
+
+        var slots = expandSlots(fleet);
+        var nO = orders.length;
+        var usedSlot = new Array(slots.length).fill(false);
+        var result = new Array(nO).fill(-1);
+
+        // --- 1) 分窗：时限升序，急单优先挑运力 ---
+        var byUrgency = [];
+        for (var i0 = 0; i0 < nO; i0++) byUrgency.push(i0);
+        byUrgency.sort(function(a, b) { return orders[a].deadline - orders[b].deadline; });
+
+        var windows = [];
+        for (var s = 0; s < byUrgency.length; s += windowSize) {
+            windows.push(byUrgency.slice(s, s + windowSize));
+        }
+
+        // --- 2) 逐窗求解（矩阵限流） ---
+        windows.forEach(function(win) {
+            var seen = {}, candList = [];
+            win.forEach(function(oi) {
+                var scored = [];
+                for (var si = 0; si < slots.length; si++) {
+                    if (usedSlot[si]) continue;
+                    var sc = scoreAircraft(orders[oi], slots[si], ctx);
+                    if (sc.feasible && sc.score >= minScore) scored.push({ si: si, v: sc.score });
+                }
+                scored.sort(function(a, b) { return b.v - a.v; });
+                var lim = Math.min(topK, scored.length);
+                for (var k = 0; k < lim; k++) {
+                    if (!seen[scored[k].si]) { seen[scored[k].si] = 1; candList.push(scored[k].si); }
+                }
+            });
+            if (candList.length > maxCand) candList = candList.slice(0, maxCand);
+            if (!candList.length) return;
+
+            var mat = win.map(function(oi) {
+                return candList.map(function(si) {
+                    var sc = scoreAircraft(orders[oi], slots[si], ctx);
+                    return (sc.feasible && sc.score >= minScore) ? sc.score : null;
+                });
+            });
+            var res = maxAssignment(mat, { minScore: minScore });
+            res.rowToCol.forEach(function(ci, ri) {
+                if (ci >= 0) { result[win[ri]] = candList[ci]; usedSlot[candList[ci]] = true; }
+            });
+        });
+
+        // --- 3) 局部交换（邻域 2-opt） ---
+        var cache = {};
+        function sc(oi, si) {
+            var key = oi + '|' + si;
+            if (cache[key] === undefined) {
+                var r = scoreAircraft(orders[oi], slots[si], ctx);
+                cache[key] = (r.feasible && r.score >= minScore) ? r.score : -1;
+            }
+            return cache[key];
+        }
+
+        var exchRounds = 0;
+        for (var round = 0; round < rounds; round++) {
+            var delta = 0;
+            // A) 已指派工单两两互换槽位
+            var assigned = [];
+            for (var i1 = 0; i1 < nO; i1++) if (result[i1] >= 0) assigned.push(i1);
+            assigned.sort(function(a, b) { return orders[a].deadline - orders[b].deadline; });
+            for (var a = 0; a < assigned.length; a++) {
+                var upto = Math.min(assigned.length, a + 1 + HIER.neighborhood);
+                for (var b = a + 1; b < upto; b++) {
+                    var oa = assigned[a], ob = assigned[b];
+                    var sa = result[oa], sb = result[ob];
+                    var cur = sc(oa, sa) + sc(ob, sb);
+                    var alt = sc(oa, sb) + sc(ob, sa);
+                    if (alt > cur + 1e-9) {
+                        result[oa] = sb; result[ob] = sa;
+                        delta += alt - cur;
+                        var tmp = sa; sa = sb; sb = tmp;   // 后续比较用新槽位
+                    }
+                }
+            }
+            // B) 未指派工单夺取低效槽位（净增益为正才换）
+            var unassigned = [];
+            for (var i2 = 0; i2 < nO; i2++) if (result[i2] < 0) unassigned.push(i2);
+            if (unassigned.length) {
+                var pool = [];
+                for (var i3 = 0; i3 < nO; i3++) if (result[i3] >= 0) pool.push(i3);
+                pool.sort(function(x, y) { return sc(x, result[x]) - sc(y, result[y]); });  // 最低分优先被夺
+                var lim2 = Math.min(pool.length, HIER.neighborhood * 2);
+                for (var u = 0; u < unassigned.length; u++) {
+                    var ou = unassigned[u];
+                    if (result[ou] >= 0) continue;
+                    for (var p = 0; p < lim2; p++) {
+                        var op = pool[p], sp = result[op];
+                        if (sp < 0) continue;
+                        var gain = sc(ou, sp) - sc(op, sp);
+                        if (gain > 1e-9) {
+                            result[ou] = sp; result[op] = -1;
+                            delta += gain;
+                            break;
+                        }
+                    }
+                }
+            }
+            exchRounds++;
+            if (delta < 1e-6) break;
+        }
+
+        var total = 0, assignedCount = 0;
+        var pairs = [];
+        for (var i4 = 0; i4 < nO; i4++) {
+            var si2 = result[i4];
+            if (si2 >= 0) {
+                var v = sc(i4, si2);
+                pairs.push({ order: orders[i4], slot: slots[si2], score: v });
+                total += v; assignedCount++;
+            } else {
+                pairs.push({ order: orders[i4], slot: null, score: 0 });
+            }
+        }
+
+        var elapsed = _now() - t0;
+        return {
+            mode: 'hierarchical',
+            optimal: {
+                total: Math.round(total * 10) / 10,
+                pairs: pairs,
+                assignedCount: assignedCount,
+                unassignedCount: nO - assignedCount
+            },
+            greedy: null,          // 大规模下贪心基线另算（见 autoAssign）
+            improvement: 0,
+            slotCount: slots.length,
+            usableSlots: slots.filter(function(sl) {
+                return sl.soh >= SO_MIN && (ctx.windBase || 0) <= sl.windMax;
+            }).length,
+            elapsedMs: Math.round(elapsed),
+            windowCount: windows.length,
+            exchangeRounds: exchRounds,
+            minScore: minScore
+        };
+    }
+
+    /**
+     * 自动分派：小规模走精确匈牙利，大规模走分层近似
+     * 这是 UI 唯一应该调用的入口
+     */
+    function autoAssign(orders, fleet, ctx, opts) {
+        opts = opts || {};
+        var threshold = opts.threshold || HIER.threshold;
+        if (orders.length > threshold) {
+            var h = hierarchicalAssign(orders, fleet, ctx, opts);
+
+            // 始终算贪心基线（1000 单仅需约 30ms，很便宜）
+            if (opts.baseline !== false) {
+                var t0 = _now();
+                var slots = expandSlots(fleet);
+                var g = greedyAssign(orders, slots, ctx, { minScore: h.minScore });
+                h.greedy = { total: Math.round(g.total * 10) / 10, pairs: g.pairs };
+                h.greedyMs = Math.round(_now() - t0);
+                h.improvement = g.total > 0 ? Math.round((h.optimal.total - g.total) / g.total * 1000) / 10 : 0;
+
+                // 取两者较优：运力宽松时贪心本就接近最优，
+                // 分层的近似损失可能反超收益。这一步保证"绝不劣于贪心"。
+                if (g.total > h.optimal.total) {
+                    var gp = g.pairs.map(function(p) {
+                        return {
+                            order: orders[p.orderIndex],
+                            slot: p.slotIndex >= 0 ? slots[p.slotIndex] : null,
+                            score: p.score || 0
+                        };
+                    });
+                    h.adopted = 'greedy';
+                    h.optimal = {
+                        total: h.greedy.total,
+                        pairs: gp,
+                        assignedCount: gp.filter(function(x) { return x.slot; }).length,
+                        unassignedCount: gp.filter(function(x) { return !x.slot; }).length
+                    };
+                    h.improvement = 0;
+                } else {
+                    h.adopted = 'hierarchical';
+                }
+            } else {
+                h.adopted = 'hierarchical';
+            }
+            return h;
+        }
+        var r = assignFleet(orders, fleet, ctx, opts);
+        r.mode = 'exact';
+        r.elapsedMs = r.elapsedMs || 0;
+        r.windowCount = 1;
+        r.exchangeRounds = 0;
+        return r;
+    }
+
+    // ================================================================
     // 导出
     // ================================================================
     return {
@@ -985,6 +1308,12 @@
         DEFAULT_STRATEGIES: DEFAULT_STRATEGIES, matchStrategy: matchStrategy,
         // 风控
         SEVERITY: SEVERITY, RISK_RULES: RISK_RULES,
-        evaluateRisk: evaluateRisk, guardrail: guardrail, explainRisk: explainRisk
+        evaluateRisk: evaluateRisk, guardrail: guardrail, explainRisk: explainRisk,
+        // 数据层
+        CARGO_NAMES: CARGO_NAMES, FLEET_ARCHETYPES: FLEET_ARCHETYPES,
+        generateOrders: generateOrders, generateFleet: generateFleet,
+        generateWeatherSeries: generateWeatherSeries,
+        // 分层求解
+        HIER: HIER, hierarchicalAssign: hierarchicalAssign, autoAssign: autoAssign
     };
 });

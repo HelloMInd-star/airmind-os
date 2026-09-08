@@ -39,8 +39,23 @@
 
             function matchFleet(order) { return AirMind.rankFleet(order, FLEET, store.scenario); }
 
+            // 默认机队快照：压力测试会改写 FLEET，需要能还原
+            var DEFAULT_FLEET = FLEET.map(function(f) {
+                var o = {}; for (var k in f) o[k] = f[k]; return o;
+            });
+            function restoreDefaultFleet() {
+                FLEET.length = 0;
+                DEFAULT_FLEET.forEach(function(f) {
+                    var o = {}; for (var k in f) o[k] = f[k]; FLEET.push(o);
+                });
+            }
+
             // 全局最优指派（匈牙利）—— 取代逐单贪心，避免高分工单抢占稀缺运力
-            function globalAssign() { return AirMind.assignFleet(orders, FLEET, store.scenario, { minScore: 35 }); }
+            // 全局最优指派：小规模走精确匈牙利，大规模自动切分层近似
+            // （UI 只应调用这一个入口，不要直接用 assignFleet）
+            function globalAssign() {
+                return AirMind.autoAssign(orders, FLEET, store.scenario, { minScore: 35 });
+            }
 
             // ============================================================
             // 1.7 Tab4 串级 PID + 仿生窗型 仿真引擎
