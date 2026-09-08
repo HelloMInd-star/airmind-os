@@ -1428,6 +1428,175 @@
     }
 
     // ================================================================
+    // 11. 多角色视角：同一份数据，不同利益相关方看到不同重点
+    // --------------------------------------------------------------
+    // 低空经济是多方博弈：空管管安全、运营商管效率、厂商管资产、
+    // 监管管合规。他们看的是同一批数据，但关心的指标几乎不重叠。
+    //
+    // 这里刻意不做成 RBAC 权限系统（那是后端工程，对 PM 岗零加分），
+    // 而是做"视角切换"——展示"同一数据对不同角色意味着什么"。
+    // 指标全部真实计算，没有写死的数字。
+    // ================================================================
+
+    var ROLES = [
+        {
+            id: 'atc', icon: '🗼', name: '空管',
+            headline: '空域安全与冲突化解',
+            question: '有没有航空器闯入不该进的空域？'
+        },
+        {
+            id: 'operator', icon: '🚁', name: '运营商',
+            headline: '运力效率与履约成本',
+            question: '这批运力用满了吗？调度优化值多少钱？'
+        },
+        {
+            id: 'vendor', icon: '🏭', name: '厂商',
+            headline: '机队资产健康度',
+            question: '哪些机型该维护了？资产在衰减吗？'
+        },
+        {
+            id: 'regulator', icon: '🏛️', name: '监管',
+            headline: '合规率与可审计性',
+            question: '决策过程留痕了吗？有没有被风控拦下过？'
+        }
+    ];
+
+    /**
+     * 计算某角色视角下的指标
+     *
+     * @param {string} roleId  atc | operator | vendor | regulator
+     * @param {object} ctx {
+     *   aircraft: [...],       // 在空航空器（含 alt/lng/lat）
+     *   zones: [...],          // 禁飞区
+     *   fleet: [...],          // 机型台账（含 soh/unit/payload）
+     *   assign: {              // 指派结果（可空）
+     *     total, greedyTotal, improvement,
+     *     assignedCount, unassignedCount, slotCount
+     *   },
+     *   orders: [...],         // 工单（含 weight）
+     *   trace: [...]           // 决策轨迹（可空）
+     * }
+     * @returns {{role, kpis:[{label,value,unit,tone}], insight:string, emphasis:string}}
+     */
+    function computeRoleMetrics(roleId, ctx) {
+        ctx = ctx || {};
+        var aircraft = ctx.aircraft || [];
+        var zones = ctx.zones || [];
+        var fleet = ctx.fleet || [];
+        var assign = ctx.assign || {};
+        var orders = ctx.orders || [];
+        var trace = ctx.trace || [];
+
+        var role = null;
+        for (var i = 0; i < ROLES.length; i++) if (ROLES[i].id === roleId) role = ROLES[i];
+        if (!role) role = ROLES[0];
+
+        var kpis = [], insight = '', emphasis = 'none';
+
+        if (role.id === 'atc') {
+            var violations = findAirspaceViolations(aircraft, zones);
+            var vCount = violations.length;
+            var rate = aircraft.length ? vCount / aircraft.length : 0;
+
+            // 冲突热点：统计每个禁飞区被闯次数
+            var byZone = {};
+            violations.forEach(function(v) {
+                v.breaches.forEach(function(b) {
+                    byZone[b.zoneName] = (byZone[b.zoneName] || 0) + 1;
+                });
+            });
+            var hot = Object.keys(byZone).sort(function(a, b) { return byZone[b] - byZone[a]; })[0];
+
+            kpis = [
+                { label: '在空航空器', value: aircraft.length, unit: '架', tone: 'blue' },
+                { label: '空域违规', value: vCount, unit: '架', tone: vCount ? 'danger' : 'success' },
+                { label: '违规率', value: Math.round(rate * 1000) / 10, unit: '%', tone: rate > 0.15 ? 'danger' : (rate > 0 ? 'gold' : 'success') },
+                { label: '管制空域', value: zones.length, unit: '个', tone: 'cyan' }
+            ];
+            emphasis = 'zones';
+            insight = vCount
+                ? '当前 ' + vCount + ' 架航空器闯入管制空域' +
+                  (hot ? '，冲突热点为「' + hot + '」（' + byZone[hot] + ' 架次）' : '') +
+                  '。建议立即下发改航指令，并对该区域实施流量控制。'
+                : '全域无空域入侵。管制空域运行正常，可维持现有流量。';
+
+        } else if (role.id === 'operator') {
+            var slotCount = assign.slotCount || fleet.reduce(function(a, f) { return a + (f.unit || 0); }, 0);
+            var assigned = assign.assignedCount || 0;
+            var util = slotCount ? assigned / slotCount : 0;
+            var imp = assign.improvement || 0;
+
+            // 载荷率：已派工单总货重 / 对应机型总载重
+            var usedSlots = (assign.pairs || []).filter(function(p) { return p.slot; });
+            var loadW = 0, capW = 0;
+            usedSlots.forEach(function(p) {
+                loadW += (p.order && p.order.weight) || 0;
+                capW += (p.slot && p.slot.payload) || 0;
+            });
+            var loadRate = capW ? loadW / capW : 0;
+
+            kpis = [
+                { label: '运力利用率', value: Math.round(util * 1000) / 10, unit: '%', tone: util > 0.8 ? 'success' : (util > 0.5 ? 'gold' : 'danger') },
+                { label: '调度增益', value: imp, unit: '%', tone: imp > 5 ? 'success' : (imp > 0 ? 'gold' : 'blue') },
+                { label: '平均载荷率', value: Math.round(loadRate * 1000) / 10, unit: '%', tone: loadRate > 0.6 ? 'success' : 'gold' },
+                { label: '未派工单', value: assign.unassignedCount || 0, unit: '单', tone: (assign.unassignedCount || 0) ? 'gold' : 'success' }
+            ];
+            emphasis = 'routes';
+            insight = imp > 5
+                ? '运力紧张，全局最优比贪心多赚 ' + imp + '%——这正是调度系统的价值所在。'
+                : (imp > 0
+                    ? '运力偏紧，全局最优增益 ' + imp + '%，优化空间有限但为正。'
+                    : '运力相对宽松，贪心已接近最优。此时再投入复杂算法收益递减，不如优先扩单。');
+
+        } else if (role.id === 'vendor') {
+            var sohs = fleet.map(function(f) { return f.soh || 0; });
+            var avgSoh = sohs.length ? sohs.reduce(function(a, c) { return a + c; }, 0) / sohs.length : 0;
+            var needMaint = fleet.filter(function(f) { return (f.soh || 0) < 70; });
+            var weakest = fleet.slice().sort(function(a, b) { return (a.soh || 0) - (b.soh || 0); })[0];
+            var totalUnit = fleet.reduce(function(a, f) { return a + (f.unit || 0); }, 0);
+
+            kpis = [
+                { label: '机队规模', value: totalUnit, unit: '架', tone: 'blue' },
+                { label: '平均健康度', value: Math.round(avgSoh * 10) / 10, unit: '%', tone: avgSoh > 80 ? 'success' : (avgSoh > 65 ? 'gold' : 'danger') },
+                { label: '需维护机型', value: needMaint.length, unit: '型', tone: needMaint.length ? 'danger' : 'success' },
+                { label: '最弱机型', value: weakest ? (weakest.soh || 0) : 0, unit: '%', tone: (weakest && weakest.soh < 70) ? 'danger' : 'gold' }
+            ];
+            emphasis = 'fleet';
+            insight = needMaint.length
+                ? '有 ' + needMaint.length + ' 个机型 SOH 低于 70%' +
+                  (weakest ? '，最弱为 ' + weakest.id + '（' + weakest.soh + '%）' : '') +
+                  '。建议提前排入维护计划——SOH 低于 60% 会被风控直接禁飞，届时才处理会造成运力断档。'
+                : '全机队健康度良好（均值 ' + Math.round(avgSoh * 10) / 10 + '%），暂无紧急维护需求。';
+
+        } else {   // regulator
+            var total = trace.length;
+            var blocked = trace.filter(function(t) { return t.final === 'BLOCKED'; }).length;
+            var warned = trace.filter(function(t) { return t.final === 'WARNED'; }).length;
+            var guardRemoved = trace.reduce(function(a, t) { return a + (t.guardBlocked || 0); }, 0);
+            var passRate = total ? (total - blocked) / total : 1;
+
+            kpis = [
+                { label: '决策留痕', value: total, unit: '条', tone: 'blue' },
+                { label: '风控阻断', value: blocked, unit: '次', tone: blocked ? 'danger' : 'success' },
+                { label: 'Guardrail 剔除', value: guardRemoved, unit: '项', tone: guardRemoved ? 'gold' : 'success' },
+                { label: '一次通过率', value: Math.round(passRate * 1000) / 10, unit: '%', tone: passRate > 0.9 ? 'success' : 'gold' }
+            ];
+            emphasis = 'none';
+            insight = total === 0
+                ? '暂无决策记录。点击 Tab3 的「编排执行」产生轨迹后，此处将展示完整的合规审计视图。'
+                : '共 ' + total + ' 条决策留痕，其中 ' + blocked + ' 次被风控阻断、' + warned + ' 次带警告执行，' +
+                  'Guardrail 累计剔除 ' + guardRemoved + ' 项违规指派。所有记录可导出 JSON，满足事后追责。';
+        }
+
+        return {
+            role: role,
+            kpis: kpis,
+            insight: insight,
+            emphasis: emphasis
+        };
+    }
+
+    // ================================================================
     // 导出
     // ================================================================
     return {
@@ -1463,6 +1632,8 @@
         routeLengths: routeLengths, routePointAt: routePointAt,
         projectToCanvas: projectToCanvas, unprojectFromCanvas: unprojectFromCanvas,
         pointInCircleKm: pointInCircleKm, pointInPolygon: pointInPolygon,
-        checkAirspace: checkAirspace, findAirspaceViolations: findAirspaceViolations
+        checkAirspace: checkAirspace, findAirspaceViolations: findAirspaceViolations,
+        // 多角色视角
+        ROLES: ROLES, computeRoleMetrics: computeRoleMetrics
     };
 });

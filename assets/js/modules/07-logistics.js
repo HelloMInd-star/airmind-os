@@ -399,6 +399,7 @@
                 safeStore.set(STRESS_FLAG, 1);
 
                 var r = AirMind.autoAssign(orders, FLEET, store.scenario, { minScore: 35 });
+                window.__lastAssign = r;
                 var t1 = (window.performance && performance.now) ? performance.now() : Date.now();
 
                 document.getElementById('stMode').textContent =
@@ -438,6 +439,7 @@
                 }
                 document.getElementById('stDetail').innerHTML = lines.join('<br/>');
 
+                if (typeof refreshRoleView === 'function') refreshRoleView();
                 recalcLogistics();
                 toast('🔥 ' + n + ' 单压测完成：' + Math.round(t1 - t0) + 'ms', 'success');
             }

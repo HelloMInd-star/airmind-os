@@ -68,6 +68,7 @@ var airView = null;              // {centerLng, centerLat, spanKm, w, h}
 var airInitDone = false;
 var airDashPhase = 0;
 var airSourceLabel = '模拟推演';
+var airEmphasis = 'none';   // none | zones | routes | fleet（由角色视角驱动）
 
 // ================================================================
 // 航线生成：起降点之间连成网络，带中间航路点（模拟绕飞）
@@ -228,10 +229,13 @@ function airDraw() {
                 var rPx = (z.radiusKm / V.spanKm) * V.w;
                 c.arc(ctr.x, ctr.y, rPx, 0, Math.PI * 2);
             }
-            c.fillStyle = fill; c.fill();
+            c.fillStyle = airEmphasis === 'zones' ? (isBlock ? 'rgba(239,83,80,0.20)' : 'rgba(212,160,64,0.16)') : fill;
+            c.fill();
             c.setLineDash([6, 4]);
             c.lineDashOffset = -airDashPhase * 0.35;
-            c.strokeStyle = stroke; c.lineWidth = 1.5; c.stroke();
+            c.strokeStyle = stroke;
+            c.lineWidth = airEmphasis === 'zones' ? 3 : 1.5;
+            c.stroke();
             c.setLineDash([]);
 
             // 标签
@@ -255,8 +259,8 @@ function airDraw() {
         });
         c.setLineDash([3, 5]);
         c.lineDashOffset = -airDashPhase * 0.5;
-        c.strokeStyle = 'rgba(59,130,246,0.28)';
-        c.lineWidth = 1.2;
+        c.strokeStyle = airEmphasis === 'routes' ? 'rgba(59,130,246,0.65)' : 'rgba(59,130,246,0.28)';
+        c.lineWidth = airEmphasis === 'routes' ? 2.4 : 1.2;
         c.stroke();
     });
     c.restore();
@@ -535,6 +539,9 @@ window.AirMindAirspace = {
         return true;
     },
     setPlaying: function(v) { airRunning = !!v; },
+    /** 角色视角联动：none | zones | routes | fleet */
+    setEmphasis: function(v) { airEmphasis = v || 'none'; },
+    getEmphasis: function() { return airEmphasis; },
     /** 恢复模拟推演：重建航线与机队 */
     restoreSim: function(n) {
         airBuildRoutes();

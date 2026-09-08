@@ -1,20 +1,16 @@
-# 🧠 Y.Mine · AirMind V2.1
+# 🧠 Y.Mine · AirMind V2.3
 ### 低空全域人机神经协同调度引擎 · Game-OS
 
-<!-- ========== 🎨 彩色徽章带 ========== -->
+<!-- 刻意不使用 shields.io 徽章：境外图片服务在国内常加载失败，
+     README 顶部会出现一整排裂图。改用纯文本表格，100% 可渲染。 -->
+<div align="center">
 
-![License](https://img.shields.io/badge/License-Apache%202.0-blue?style=for-the-badge&logo=apache)
-![Status](https://img.shields.io/badge/Status-Active-brightgreen?style=for-the-badge&logo=github)
-![PRs](https://img.shields.io/badge/PRs-Welcome-purple?style=for-the-badge&logo=git)
-![JS](https://img.shields.io/badge/JavaScript-ES6+-yellow?style=for-the-badge&logo=javascript)
-![CSS](https://img.shields.io/badge/CSS3-Variables-blueviolet?style=for-the-badge&logo=css3)
-![ECharts](https://img.shields.io/badge/ECharts-5.4-cyan?style=for-the-badge&logo=apacheecharts)
-![Deploy](https://img.shields.io/badge/Deploy-GitHub%20Pages-black?style=for-the-badge&logo=githubpages)
-![Build](https://img.shields.io/badge/Build-零构建-silver?style=for-the-badge&logo=gnubash)
-![Tests](https://img.shields.io/badge/Tests-107%20passing-brightgreen?style=for-the-badge&logo=vitest)
-![Map](https://img.shields.io/badge/Map-Canvas%20Digital%20Twin-blue?style=for-the-badge)
-![Guardrail](https://img.shields.io/badge/Guardrail-11%20rules-red?style=for-the-badge&logo=shield)
-![Storage](https://img.shields.io/badge/Storage-LocalStorage-orange?style=for-the-badge)
+| 状态 | 测试 | 算法层 | 风控 | 构建 | 许可 |
+|:---:|:---:|:---:|:---:|:---:|:---:|
+| 🟢 活跃 | **123 通过** | 纯函数 · 可 Node 单测 | 11 条规则 + Guardrail | 零构建 | Apache-2.0 |
+
+**纯前端 · 零依赖构建 · 双击 `index.html` 即可运行**
+</div>
 
 > **在线体验**：https://hellomind-star.github.io/airmind-os/
 > 打开即用，无需注册、无需后端、数据不出浏览器。
@@ -250,6 +246,35 @@ vertiports.forEach(v => {
 
 *（注：OpenSky 免费账号有速率限制，频繁点击「接真实数据」可能触发 429，此时同样会降级。）*
 
+### Tab 1 多角色视角：同一份数据，四种解读
+
+低空经济是多方博弈——**空管管安全、运营商管效率、厂商管资产、监管管合规**。他们看的是同一批数据，但关心的指标几乎不重叠。
+
+| 角色 | 关心 | 指标 |
+| :--- | :--- | :--- |
+| 🗼 **空管** | 有没有航空器闯入不该进的空域？ | 在空架数 / 空域违规 / 违规率 / 冲突热点 |
+| 🚁 **运营商** | 这批运力用满了吗？优化值多少钱？ | 运力利用率 / 调度增益 / 载荷率 / 未派工单 |
+| 🏭 **厂商** | 哪些机型该维护了？ | 机队规模 / 平均 SOH / 需维护机型 / 最弱机型 |
+| 🏛️ **监管** | 决策留痕了吗？被拦截过吗？ | 决策留痕 / 风控阻断 / Guardrail 剔除 / 一次通过率 |
+
+切换角色时**地图联动高亮**：空管看禁飞区（加粗）、运营商看航线、厂商看机队。
+
+**这里刻意不做 RBAC 权限系统**——那是后端工程，对 PM 岗几乎零加分。做"视角切换"是为了展示"同一数据对不同利益相关方意味着什么"，这才是产品经理的核心工作。
+
+所有指标由 `computeRoleMetrics` 真实计算，测试里有一条专门验证**不是写死的常量**：
+
+```js
+// 四个角色看同一批数据，结论必须各不相同
+assert.equal(new Set(insights).size, 4);
+```
+
+**洞察会随数据变化给出不同建议**，而不是永远同一句话。例如运营商视角：
+
+- 增益 16.4% → "运力紧张，全局最优比贪心多赚 16.4%——这正是调度系统的价值所在"
+- 增益 0% → "运力相对宽松，贪心已接近最优。此时再投入复杂算法收益递减，**不如优先扩单**"
+
+后一条其实是在说实话：**有些场景下不值得优化**。这比一个永远说"优化很有效"的系统更有价值。
+
 ### Tab 4 控制仿真
 
 - 三种仿生"窗型"对应二阶系统参数：`无锁落地窗 ζ=0.18 / 推拉活动窗 ζ=0.45 / 多点锁平开窗 ζ=0.72`
@@ -379,7 +404,7 @@ V2.1 把所有纯计算抽到了 `assets/js/core/algorithms.js`——**无 DOM �
 npm test        # 等价于 node --test tests/，零依赖，无需 npm install
 ```
 
-**107 项测试，重点是不变量而非快照值**——把今天的输出钉死成断言，会让明天的重构寸步难行：
+**123 项测试，重点是不变量而非快照值**——把今天的输出钉死成断言，会让明天的重构寸步难行：
 
 | 测试类型 | 覆盖内容 |
 | :--- | :--- |
@@ -396,6 +421,7 @@ npm test        # 等价于 node --test tests/，零依赖，无需 npm install
 | **数据生成** | 订单流 >80% 理论可行；气象时序均值回归收敛；机队槽位编号唯一 |
 | **空域地理** | 投影与反投影互逆；航点端点精确、中间无跳变；高度上限之上飞越合规 |
 | **★ 回归** | 起降点不得被自身净空区误判（曾导致 39% 误报） |
+| **角色视角** | 四角色洞察必须各不相同；任意随机输入下不得产生 NaN；指标随输入变化（非写死） |
 
 > **为什么先做这步**：Agent 编排层的每个决策最终都落到这些函数上。地基不可信时，上层编排只会把局部最优放大成系统性错误。
 
@@ -419,6 +445,7 @@ npm test        # 等价于 node --test tests/，零依赖，无需 npm install
 | V2.1.3 | UI 层拆分为 10 个模块 + 修复 ECharts 隐藏容器 0 宽度 bug | ✅ 已完成 |
 | V2.1.4 | 数据层（订单流/机队/气象时序）+ 分层求解（千级工单可在浏览器跑完） | ✅ 已完成 |
 | V2.3 | **数字孪生空域地图** + 真实数据接入（OpenSky / Open-Meteo） | ✅ 已完成 |
+| V2.3.1 | **多角色视角**：空管 / 运营商 / 厂商 / 监管 四种解读 | ✅ 已完成 |
 | V2.3.1 | 验证真实数据链路（沙盒无法自测，需在真实网络下确认） | 🚧 待验证 |
 | V2.4 | **Web Worker**：把万级工单求解移出主线程（当前 10000 单需 8.2s，会卡 UI） | 📋 规划中 |
 | V2.2 | **Agent 编排层**：风控 Agent + Guardrail + 决策轨迹（✅ 已完成）→ 感知 / 定价 / 派单 Agent + 反射循环 | 🚧 进行中 |
@@ -463,12 +490,14 @@ airmind-os/
 │       ├── 09-pid.js             # Tab4 串级 PID 仿真
 │       ├── 10-init.js            # 子Tab切换 / 紧急停机 / 应用初始化
 │       ├── 11-airspace.js        # 数字孪生空域（Canvas 自绘，零依赖）
-│       └── 12-livefeed.js        # 真实数据接入（OpenSky / Open-Meteo，带降级）
+│       ├── 12-livefeed.js        # 真实数据接入（OpenSky / Open-Meteo，带降级）
+│       └── 13-roles.js           # 多角色视角（空管/运营商/厂商/监管）
 ├── tests/
 │   ├── algorithms.test.js        # 40 项：凯利 / 定价 / 指派 / PID / 应急
 │   ├── risk.test.js              # 24 项：风控 Agent / Guardrail
 │   ├── data-hier.test.js         # 22 项：数据层 / 分层求解
-│   └── airspace.test.js          # 21 项：投影 / 航线 / 禁飞区入侵检测
+│   ├── airspace.test.js          # 21 项：投影 / 航线 / 禁飞区入侵检测
+│   └── roles.test.js             # 16 项：多角色指标计算
 ├── package.json                  # 仅提供 npm test 快捷入口
 ├── README.md
 └── LICENSE                       # Apache 2.0
@@ -504,6 +533,8 @@ airmind-os/
 | **蒙特卡洛为固定仓位** | 假设每期按同一比例 f 下注，未建模随资本变化的动态调仓 |
 | **Agent 为确定性规则** | 当前是规则驱动的确定性策略对象，**不含 LLM**。好处是可复现、可测试、可审计；代价是无法处理规则外的长尾情形 |
 | **风控无反射循环** | 当前风控被阻断后直接放弃，未实现"自动降级参数后重试"的反射循环（V2.2 规划中） |
+| **角色视角仅为展示层** | 四个角色共用同一份数据，切换只改变**呈现与指标口径**，不涉及真实权限隔离或数据可见性控制 |
+| **真实数据未实测** | OpenSky / Open-Meteo 为境外服务，国内直连基本不可用；接入逻辑未经真实网络验证（见上文） |
 
 ---
 
@@ -524,7 +555,7 @@ git push origin feature/your-idea
 
 | 层级 | 内容 | 许可证 |
 | :--- | :--- | :---: |
-| **公开层**（本仓库） | UI / 交互 / 通用算法 | ![License](https://img.shields.io/badge/License-Apache%202.0-blue?style=flat-square&logo=apache) |
+| **公开层**（本仓库） | UI / 交互 / 通用算法 | Apache-2.0 |
 | **私有内核**（密封存证） | 双层阻尼张量、内外对流矩阵、地层应力模型 | 🔒 不公开 |
 
 详见 [LICENSE](./LICENSE)。

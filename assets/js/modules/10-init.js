@@ -146,6 +146,9 @@
                     if (window.AirMindAirspace) window.AirMindAirspace.resize();
                 });
 
+                // --- 多角色视角 ---
+                initRoles();
+
                 // --- 风控 / 编排 ---
                 var riskRun = document.getElementById('riskRun');
                 if (riskRun) riskRun.addEventListener('click', reviewOnly);
